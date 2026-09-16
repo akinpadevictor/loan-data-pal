@@ -190,17 +190,19 @@ export function buildRepaymentMonths(rows: Row[]): MonthRow[] {
 
 /** Sorted list of the selected month plus the three months before it. */
 export function windowMonths(current: string, count = 4): string[] {
-  const [y, m] = current.split("-").map(Number);
+  const parts = current.split("-").map(Number);
+  const y = parts[0] ?? 1970;
+  const m = parts[1] ?? 1;
   const months: string[] = [];
   for (let i = count - 1; i >= 0; i--) {
-    const d = new Date(Date.UTC(y, (m ?? 1) - 1 - i, 1));
+    const d = new Date(Date.UTC(y, m - 1 - i, 1));
     months.push(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`);
   }
   return months;
 }
 
 export function monthLabel(month: string): string {
-  const [y, m] = month.split("-").map(Number);
-  const d = new Date(Date.UTC(y, (m ?? 1) - 1, 1));
+  const parts = month.split("-").map(Number);
+  const d = new Date(Date.UTC(parts[0] ?? 1970, (parts[1] ?? 1) - 1, 1));
   return d.toLocaleDateString("en-GB", { month: "short", year: "numeric", timeZone: "UTC" });
 }
