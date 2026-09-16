@@ -89,19 +89,30 @@ export const ingestBatch = createServerFn({ method: "POST" })
 
     const merged = rows.map((row, i) => {
       const prev = existingMap.get(keys[i]!) ?? {};
-      const out: Record<string, unknown> = {
+      const pick = (field: (typeof NUMERIC_MONTH_FIELDS)[number]): number | null => {
+        const incoming = (row as Record<string, unknown>)[field];
+        if (incoming === undefined || incoming === null) {
+          return (prev[field] as number | null | undefined) ?? null;
+        }
+        return Number(incoming);
+      };
+      return {
         phone: row.phone,
         month: row.month,
         updated_at: new Date().toISOString(),
+        loan_count: pick("loan_count"),
+        loan_amount: pick("loan_amount"),
+        avg_loan_aging: pick("avg_loan_aging"),
+        amount_recovered: pick("amount_recovered"),
+        amount_pending: pick("amount_pending"),
+        collection_amount: pick("collection_amount"),
+        collection_active_days: pick("collection_active_days"),
+        pos_active_days: pick("pos_active_days"),
+        pos_collection: pick("pos_collection"),
+        txn_count: pick("txn_count"),
+        repayment_amount: pick("repayment_amount"),
+        repayment_count: pick("repayment_count"),
       };
-      for (const field of NUMERIC_MONTH_FIELDS) {
-        const incoming = (row as Record<string, unknown>)[field];
-        out[field] =
-          incoming === undefined || incoming === null
-            ? ((prev[field] as number | null | undefined) ?? null)
-            : Number(incoming);
-      }
-      return out;
     });
 
     const { error } = await supabaseAdmin
