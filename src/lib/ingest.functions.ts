@@ -48,10 +48,22 @@ export const ingestBatch = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     if (data.target === "customers") {
-      const rows = data.rows.map((r) => ({
-        ...customerSchema.parse(r),
-        updated_at: new Date().toISOString(),
-      }));
+      const rows = data.rows.map((r) => {
+        const c = customerSchema.parse(r);
+        return {
+          phone: c.phone,
+          name: c.name ?? null,
+          ref: c.ref ?? null,
+          state: c.state ?? null,
+          market: c.market ?? null,
+          agent: c.agent ?? null,
+          pl_limit: c.pl_limit ?? null,
+          pl_balance: c.pl_balance ?? null,
+          pos_installed: c.pos_installed ?? null,
+          loan_type: c.loan_type ?? null,
+          updated_at: new Date().toISOString(),
+        };
+      });
       const { error } = await supabaseAdmin.from("customers").upsert(rows, { onConflict: "phone" });
       if (error) throw new Error(error.message);
       return { inserted: rows.length };
