@@ -9,6 +9,7 @@ import {
 } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
 
+import { Toaster } from "@/components/ui/sonner";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 
@@ -77,19 +78,25 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
-      { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { title: "Credit Lens — Customer Credit & Collections Lookup" },
+      {
+        name: "description",
+        content:
+          "Look up a customer by phone number and review PL limit, loan usage, repayment days, collections and POS activity month by month.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:site", content: "@Lovable" },
     ],
     links: [
       {
         rel: "stylesheet",
         href: appCss,
+      },
+      { rel: "preconnect", href: "https://fonts.googleapis.com" },
+      { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
+      {
+        rel: "stylesheet",
+        href: "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap",
       },
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
     ],
@@ -119,8 +126,38 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-      <Outlet />
+      <div className="min-h-screen">
+        <header className="sticky top-0 z-30 border-b border-border/70 bg-background/85 backdrop-blur">
+          <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-3.5">
+            <Link to="/" className="flex items-center gap-2.5">
+              <span className="flex size-8 items-center justify-center rounded-md bg-primary text-sm font-bold text-primary-foreground">
+                CL
+              </span>
+              <span className="text-sm font-bold tracking-tight">Credit Lens</span>
+            </Link>
+            <nav className="flex items-center gap-1 text-sm">
+              <Link
+                to="/"
+                activeOptions={{ exact: true }}
+                activeProps={{ className: "bg-secondary text-foreground" }}
+                className="rounded-md px-3 py-1.5 font-medium text-muted-foreground transition-colors hover:text-foreground"
+              >
+                Lookup
+              </Link>
+              <Link
+                to="/upload"
+                activeProps={{ className: "bg-secondary text-foreground" }}
+                className="rounded-md px-3 py-1.5 font-medium text-muted-foreground transition-colors hover:text-foreground"
+              >
+                Update data
+              </Link>
+            </nav>
+          </div>
+        </header>
+        {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+        <Outlet />
+      </div>
+      <Toaster />
     </QueryClientProvider>
   );
 }
