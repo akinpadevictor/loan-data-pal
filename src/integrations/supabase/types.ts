@@ -21,9 +21,11 @@ export type Database = {
           avg_loan_aging: number | null
           collection_active_days: number | null
           collection_amount: number | null
+          interest_accrued: number | null
           loan_amount: number | null
           loan_count: number | null
           month: string
+          npl_value: number | null
           phone: string
           pos_active_days: number | null
           pos_collection: number | null
@@ -38,9 +40,11 @@ export type Database = {
           avg_loan_aging?: number | null
           collection_active_days?: number | null
           collection_amount?: number | null
+          interest_accrued?: number | null
           loan_amount?: number | null
           loan_count?: number | null
           month: string
+          npl_value?: number | null
           phone: string
           pos_active_days?: number | null
           pos_collection?: number | null
@@ -55,9 +59,11 @@ export type Database = {
           avg_loan_aging?: number | null
           collection_active_days?: number | null
           collection_amount?: number | null
+          interest_accrued?: number | null
           loan_amount?: number | null
           loan_count?: number | null
           month?: string
+          npl_value?: number | null
           phone?: string
           pos_active_days?: number | null
           pos_collection?: number | null

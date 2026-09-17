@@ -24,6 +24,8 @@ export type MonthRow = {
   loan_count?: number | null;
   loan_amount?: number | null;
   avg_loan_aging?: number | null;
+  interest_accrued?: number | null;
+  npl_value?: number | null;
   amount_recovered?: number | null;
   amount_pending?: number | null;
   collection_amount?: number | null;
@@ -142,6 +144,8 @@ export function buildLoanMonths(rows: Row[]): MonthRow[] {
     b.loan_amount = (b.loan_amount ?? 0) + (num(row["LOANAMOUNT"]) ?? 0);
     b.amount_recovered = (b.amount_recovered ?? 0) + (num(row["Total Amount Recovered"]) ?? 0);
     b.amount_pending = (b.amount_pending ?? 0) + (num(row["Total Amount Pending"]) ?? 0);
+    b.interest_accrued =
+      (b.interest_accrued ?? 0) + (num(row["Total Interest Accrued"]) ?? 0);
     const ids = loanIds.get(key) ?? new Set<string>();
     ids.add(String(row["LOANID"] ?? `${key}-${ids.size}`));
     loanIds.set(key, ids);
@@ -151,6 +155,9 @@ export function buildLoanMonths(rows: Row[]): MonthRow[] {
       acc.sum += aging;
       acc.n += 1;
       agingSum.set(key, acc);
+      if (aging > 20) {
+        b.npl_value = (b.npl_value ?? 0) + (num(row["Total Amount Pending"]) ?? 0);
+      }
     }
   }
   for (const [key, bucket] of map) {

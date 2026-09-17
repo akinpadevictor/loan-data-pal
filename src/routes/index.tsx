@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { Search, Phone, ArrowRight, Loader2 } from "lucide-react";
+import { Search, Phone, ArrowRight, Loader2, TriangleAlert } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -18,11 +18,13 @@ export const Route = createFileRoute("/")({
           "Enter a customer phone number to see PL limit, loan usage, average repayment days, PL balance, collections and POS activity for each month.",
       },
       { property: "og:title", content: "Customer Lookup — Credit Lens" },
+      { property: "og:type", content: "website" },
       {
         property: "og:description",
         content:
           "Monthly credit and collection performance for any customer, looked up by phone number.",
       },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: LookupPage,
@@ -46,6 +48,8 @@ type MonthRecord = {
   loan_count: number | null;
   loan_amount: number | null;
   avg_loan_aging: number | null;
+  interest_accrued: number | null;
+  npl_value: number | null;
   collection_amount: number | null;
   collection_active_days: number | null;
   pos_active_days: number | null;
@@ -81,7 +85,7 @@ function LookupPage() {
       const { data: months, error: monthsError } = await supabase
         .from("customer_months")
         .select(
-          "month, loan_count, loan_amount, avg_loan_aging, collection_amount, collection_active_days, pos_active_days, repayment_amount, amount_pending",
+          "month, loan_count, loan_amount, avg_loan_aging, interest_accrued, npl_value, collection_amount, collection_active_days, pos_active_days, amount_pending",
         )
         .eq("phone", phone)
         .order("month", { ascending: false });
@@ -137,9 +141,21 @@ function LookupPage() {
     },
     { label: "Loans taken", get: (m) => plain(m?.loan_count ?? null) },
     {
-      label: "Avg repayment days",
+      label: "Loan aging",
       hint: "Average loan age of loans taken",
-      get: (m) => plain(m?.avg_loan_aging ?? null, " days"),
+      get: (m) =>
+        m?.avg_loan_aging !== null && m?.avg_loan_aging !== undefined && m.avg_loan_aging > 20
+          ? `${plain(m.avg_loan_aging, " days")} · Possible NPL`
+          : plain(m?.avg_loan_aging ?? null, " days"),
+    },
+    {
+      label: "Interest accrued",
+      get: (m) => money(m?.interest_accrued ?? null),
+    },
+    {
+      label: "NPL value",
+      hint: "Pending value on loans aged above 20 days",
+      get: (m) => money(m?.npl_value ?? null),
     },
     {
       label: "Collection amount",
@@ -152,10 +168,6 @@ function LookupPage() {
     {
       label: "POS active days",
       get: (m) => plain(m?.pos_active_days ?? null),
-    },
-    {
-      label: "Repayments received",
-      get: (m) => money(m?.repayment_amount ?? null),
     },
   ];
 
@@ -216,7 +228,8 @@ function LookupPage() {
           <div className="panel p-6">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
-                <h2 className="text-xl font-bold">{customer.name ?? "Unnamed customer"}</h2>
+                <p className="label-caps">Organization name</p>
+                <h2 className="mt-1 text-xl font-bold">{customer.name ?? "Unnamed customer"}</h2>
                 <p className="numeric mt-1 text-sm text-muted-foreground">{customer.phone}</p>
               </div>
               <div className="flex flex-wrap gap-2 text-xs">
@@ -304,7 +317,17 @@ function LookupPage() {
                       </td>
                       {shownMonths.map((m) => (
                         <td key={m} className="numeric px-5 py-3 text-right">
-                          {row.get(byMonth.get(m))}
+                          {row.label === "Loan aging" &&
+                          (byMonth.get(m)?.avg_loan_aging ?? 0) > 20 ? (
+                            <span className="inline-flex flex-col items-end gap-1">
+                              <span>{plain(byMonth.get(m)?.avg_loan_aging, " days")}</span>
+                              <span className="inline-flex items-center gap-1 text-xs font-semibold text-warning">
+                                <TriangleAlert className="size-3" /> Possible NPL
+                              </span>
+                            </span>
+                          ) : (
+                            row.get(byMonth.get(m))
+                          )}
                         </td>
                       ))}
                     </tr>
