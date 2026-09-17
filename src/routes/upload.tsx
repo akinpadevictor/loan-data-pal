@@ -30,10 +30,12 @@ export const Route = createFileRoute("/upload")({
           "Upload the latest Customer Overview, Loan Information, Distributor Detail and Transaction Log files to refresh every customer's monthly figures.",
       },
       { property: "og:title", content: "Update Data — Credit Lens" },
+      { property: "og:type", content: "website" },
       {
         property: "og:description",
         content: "Drop in your daily files and the monthly customer figures refresh automatically.",
       },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: UploadPage,

@@ -18,11 +18,13 @@ export const Route = createFileRoute("/")({
           "Enter a customer phone number to see PL limit, loan usage, average repayment days, PL balance, collections and POS activity for each month.",
       },
       { property: "og:title", content: "Customer Lookup — Credit Lens" },
+      { property: "og:type", content: "website" },
       {
         property: "og:description",
         content:
           "Monthly credit and collection performance for any customer, looked up by phone number.",
       },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: LookupPage,
