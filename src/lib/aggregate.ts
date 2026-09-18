@@ -16,6 +16,15 @@ export type CustomerRow = {
   pl_balance: number | null;
   pos_installed: string | null;
   loan_type: string | null;
+  onboarding_date: string | null;
+};
+
+/** Cumulative, customer-level figures derived from Loan Information. */
+export type RiskRow = {
+  phone: string;
+  total_pending: number | null;
+  npl_value: number | null;
+  max_loan_aging: number | null;
 };
 
 export type MonthRow = {
@@ -24,8 +33,8 @@ export type MonthRow = {
   loan_count?: number | null;
   loan_amount?: number | null;
   avg_loan_aging?: number | null;
-  interest_accrued?: number | null;
-  npl_value?: number | null;
+  aging_sum?: number | null;
+  aging_count?: number | null;
   amount_recovered?: number | null;
   amount_pending?: number | null;
   collection_amount?: number | null;
@@ -44,6 +53,9 @@ export const DATASET_LABELS: Record<Dataset, string> = {
   transaction_log: "Transaction Log",
 };
 
+/** Loans aged above this many days count towards the NPL value. */
+export const NPL_AGING_DAYS = 20;
+
 export function normalizePhone(value: unknown): string {
   const digits = String(value ?? "").replace(/\D/g, "");
   return digits.length >= 10 ? digits.slice(-10) : "";
@@ -60,16 +72,27 @@ function str(value: unknown): string | null {
   return s === "" || s.toLowerCase() === "nan" ? null : s;
 }
 
+function excelDate(value: unknown): Date | null {
+  if (value === null || value === undefined || value === "") return null;
+  if (value instanceof Date) return value;
+  const asNumber = typeof value === "number" ? value : Number(value);
+  if (Number.isFinite(asNumber) && asNumber > 20000 && asNumber < 90000) {
+    return new Date(Math.round((asNumber - 25569) * 86400 * 1000));
+  }
+  const parsed = new Date(String(value));
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+/** Excel serial dates, JS dates and text dates -> "YYYY-MM-DD". */
+export function toDateString(value: unknown): string | null {
+  const d = excelDate(value);
+  if (!d || Number.isNaN(d.getTime())) return null;
+  return d.toISOString().slice(0, 10);
+}
+
 /** Excel serial dates, JS dates and text dates -> "YYYY-MM". */
 export function toMonth(value: unknown): string | null {
-  if (value === null || value === undefined || value === "") return null;
-  let d: Date | null = null;
-  if (value instanceof Date) d = value;
-  else if (typeof value === "number") d = new Date(Math.round((value - 25569) * 86400 * 1000));
-  else {
-    const parsed = new Date(String(value));
-    if (!Number.isNaN(parsed.getTime())) d = parsed;
-  }
+  const d = excelDate(value);
   if (!d || Number.isNaN(d.getTime())) return null;
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
 }
@@ -86,6 +109,29 @@ export function detectDataset(headers: string[]): Dataset | null {
 
 type Row = Record<string, unknown>;
 
+/** REF -> phone, so loan and collection rows attach to the right customer. */
+export type RefMap = Map<string, string>;
+
+function rowRef(r: Row): string | null {
+  const ref = str(r["REF"]) ?? str(r["Ref"]) ?? str(r["ref"]);
+  return ref ? ref.trim().toLowerCase() : null;
+}
+
+/** Customer key: matched on REF where possible, otherwise the phone number. */
+function keyOf(r: Row, refMap?: RefMap): string {
+  const ref = rowRef(r);
+  if (ref && refMap?.has(ref)) return refMap.get(ref)!;
+  return normalizePhone(r["Phone"]);
+}
+
+export function buildRefMap(customers: { ref: string | null; phone: string }[]): RefMap {
+  const map: RefMap = new Map();
+  for (const c of customers) {
+    if (c.ref && c.phone) map.set(c.ref.trim().toLowerCase(), c.phone);
+  }
+  return map;
+}
+
 export function buildCustomers(rows: Row[]): CustomerRow[] {
   const map = new Map<string, CustomerRow>();
   for (const r of rows) {
@@ -98,7 +144,7 @@ export function buildCustomers(rows: Row[]): CustomerRow[] {
       map.set(phone, {
         phone,
         name: str(r["Organisation_Name"]) ?? str(r["Name"]),
-        ref: str(r["Ref"]),
+        ref: str(r["Ref"]) ?? str(r["REF"]),
         state: str(r["State Name"]),
         market: str(r["Market Name"]) ?? str(r["market"]),
         agent: str(r["Agent Name"]),
@@ -106,6 +152,7 @@ export function buildCustomers(rows: Row[]): CustomerRow[] {
         pl_balance: balance,
         pos_installed: str(r["POS Installed (Y/N)"]),
         loan_type: str(r["LoanType"]),
+        onboarding_date: toDateString(r["FirstLimitAssignmentDate"] ?? r["FirstLimitAssignedDate"]),
       });
     } else {
       existing.pl_limit = Math.max(existing.pl_limit ?? 0, limit ?? 0) || existing.pl_limit;
@@ -115,13 +162,20 @@ export function buildCustomers(rows: Row[]): CustomerRow[] {
   return [...map.values()];
 }
 
+/** Numeric days out of a "7 Days" style Loan Aging value. */
+export function loanAgingDays(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const match = String(value).match(/-?\d+(\.\d+)?/);
+  return match ? Number(match[0]) : null;
+}
+
 type Bucket = { phone: string; month: string; [k: string]: unknown };
 
-function bucketize(rows: Row[], monthOf: (r: Row) => string | null) {
+function bucketize(rows: Row[], monthOf: (r: Row) => string | null, refMap?: RefMap) {
   const map = new Map<string, Bucket>();
   const out: { key: string; bucket: Bucket; row: Row }[] = [];
   for (const r of rows) {
-    const phone = normalizePhone(r["Phone"]);
+    const phone = keyOf(r, refMap);
     const month = monthOf(r);
     if (!phone || !month) continue;
     const key = `${phone}|${month}`;
@@ -135,42 +189,61 @@ function bucketize(rows: Row[], monthOf: (r: Row) => string | null) {
   return { map, out };
 }
 
-export function buildLoanMonths(rows: Row[]): MonthRow[] {
-  const { map, out } = bucketize(rows, (r) => toMonth(r["LOANDATE"] ?? r["Date"]));
-  const agingSum = new Map<string, { sum: number; n: number }>();
+export function buildLoanMonths(rows: Row[], refMap?: RefMap): MonthRow[] {
+  const { map, out } = bucketize(rows, (r) => toMonth(r["LOANDATE"] ?? r["Date"]), refMap);
   const loanIds = new Map<string, Set<string>>();
   for (const { key, bucket, row } of out) {
     const b = bucket as MonthRow & Bucket;
     b.loan_amount = (b.loan_amount ?? 0) + (num(row["LOANAMOUNT"]) ?? 0);
     b.amount_recovered = (b.amount_recovered ?? 0) + (num(row["Total Amount Recovered"]) ?? 0);
     b.amount_pending = (b.amount_pending ?? 0) + (num(row["Total Amount Pending"]) ?? 0);
-    b.interest_accrued =
-      (b.interest_accrued ?? 0) + (num(row["Total Interest Accrued"]) ?? 0);
     const ids = loanIds.get(key) ?? new Set<string>();
     ids.add(String(row["LOANID"] ?? `${key}-${ids.size}`));
     loanIds.set(key, ids);
-    const aging = num(String(row["Loan Aging"] ?? "").match(/\d+/)?.[0] ?? row["Loan Aging"]);
+    const aging = loanAgingDays(row["Loan Aging"]);
     if (aging !== null) {
-      const acc = agingSum.get(key) ?? { sum: 0, n: 0 };
-      acc.sum += aging;
-      acc.n += 1;
-      agingSum.set(key, acc);
-      if (aging > 20) {
-        b.npl_value = (b.npl_value ?? 0) + (num(row["Total Amount Pending"]) ?? 0);
-      }
+      b.aging_sum = (b.aging_sum ?? 0) + aging;
+      b.aging_count = (b.aging_count ?? 0) + 1;
     }
   }
   for (const [key, bucket] of map) {
     const b = bucket as MonthRow & Bucket;
     b.loan_count = loanIds.get(key)?.size ?? 0;
-    const acc = agingSum.get(key);
-    b.avg_loan_aging = acc && acc.n > 0 ? Math.round((acc.sum / acc.n) * 10) / 10 : null;
+    b.avg_loan_aging =
+      b.aging_count && b.aging_count > 0
+        ? Math.round(((b.aging_sum ?? 0) / b.aging_count) * 10) / 10
+        : null;
   }
   return [...map.values()] as MonthRow[];
 }
 
-export function buildCollectionMonths(rows: Row[]): MonthRow[] {
-  const { map, out } = bucketize(rows, (r) => toMonth(r["Date"]));
+/**
+ * Cumulative loan risk per customer, across every Loan Information record:
+ * total amount pending, NPL value (aging above 20 days) and highest aging.
+ */
+export function buildLoanRisk(rows: Row[], refMap?: RefMap): RiskRow[] {
+  const map = new Map<string, RiskRow>();
+  for (const r of rows) {
+    const phone = keyOf(r, refMap);
+    if (!phone) continue;
+    let entry = map.get(phone);
+    if (!entry) {
+      entry = { phone, total_pending: 0, npl_value: 0, max_loan_aging: null };
+      map.set(phone, entry);
+    }
+    const pending = num(r["Total Amount Pending"]) ?? 0;
+    entry.total_pending = (entry.total_pending ?? 0) + pending;
+    const aging = loanAgingDays(r["Loan Aging"]);
+    if (aging !== null) {
+      if (entry.max_loan_aging === null || aging > entry.max_loan_aging) entry.max_loan_aging = aging;
+      if (aging > NPL_AGING_DAYS) entry.npl_value = (entry.npl_value ?? 0) + pending;
+    }
+  }
+  return [...map.values()];
+}
+
+export function buildCollectionMonths(rows: Row[], refMap?: RefMap): MonthRow[] {
+  const { map, out } = bucketize(rows, (r) => toMonth(r["Date"]), refMap);
   for (const { bucket, row } of out) {
     const b = bucket as MonthRow & Bucket;
     b.collection_amount = (b.collection_amount ?? 0) + (num(row["Total Collection"]) ?? 0);
@@ -182,11 +255,11 @@ export function buildCollectionMonths(rows: Row[]): MonthRow[] {
   return [...map.values()] as MonthRow[];
 }
 
-export function buildRepaymentMonths(rows: Row[]): MonthRow[] {
+export function buildRepaymentMonths(rows: Row[], refMap?: RefMap): MonthRow[] {
   const repayments = rows.filter(
     (r) => String(r["TRANSACTIONTYPE"] ?? "").toLowerCase() === "amountrepaid",
   );
-  const { map, out } = bucketize(repayments, (r) => toMonth(r["TRANSACTIONDATE"]));
+  const { map, out } = bucketize(repayments, (r) => toMonth(r["TRANSACTIONDATE"]), refMap);
   for (const { bucket, row } of out) {
     const b = bucket as MonthRow & Bucket;
     b.repayment_amount = (b.repayment_amount ?? 0) + (num(row["AMOUNT"]) ?? 0);
@@ -208,8 +281,49 @@ export function windowMonths(current: string, count = 4): string[] {
   return months;
 }
 
+/** The month, shifted back by `back` months. */
+export function shiftMonth(month: string, back: number): string {
+  const parts = month.split("-").map(Number);
+  const d = new Date(Date.UTC(parts[0] ?? 1970, (parts[1] ?? 1) - 1 - back, 1));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+/**
+ * Average loan aging over a 3-month rolling window ending with `month`.
+ * Returns null when none of the three months has a loan record.
+ */
+export function rollingAvgAging(
+  month: string,
+  data: Map<string, { aging_sum: number | null; aging_count: number | null }>,
+  windowSize = 3,
+): number | null {
+  let sum = 0;
+  let count = 0;
+  for (let i = 0; i < windowSize; i++) {
+    const record = data.get(shiftMonth(month, i));
+    if (!record) continue;
+    if (record.aging_count && record.aging_count > 0) {
+      sum += record.aging_sum ?? 0;
+      count += record.aging_count;
+    }
+  }
+  return count > 0 ? Math.round((sum / count) * 10) / 10 : null;
+}
+
 export function monthLabel(month: string): string {
   const parts = month.split("-").map(Number);
   const d = new Date(Date.UTC(parts[0] ?? 1970, (parts[1] ?? 1) - 1, 1));
   return d.toLocaleDateString("en-GB", { month: "short", year: "numeric", timeZone: "UTC" });
+}
+
+export function dateLabel(value: string | null | undefined): string {
+  if (!value) return "—";
+  const d = new Date(`${value}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  });
 }
