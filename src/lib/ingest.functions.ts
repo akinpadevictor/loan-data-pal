@@ -12,6 +12,14 @@ const customerSchema = z.object({
   pl_balance: z.number().nullable().optional(),
   pos_installed: z.string().nullable().optional(),
   loan_type: z.string().nullable().optional(),
+  onboarding_date: z.string().nullable().optional(),
+});
+
+const riskSchema = z.object({
+  phone: z.string().min(6),
+  total_pending: z.number().nullable().optional(),
+  npl_value: z.number().nullable().optional(),
+  max_loan_aging: z.number().nullable().optional(),
 });
 
 const monthSchema = z
@@ -22,7 +30,7 @@ const monthSchema = z
   .catchall(z.union([z.number(), z.string(), z.null()]));
 
 const payloadSchema = z.object({
-  target: z.enum(["customers", "months"]),
+  target: z.enum(["customers", "months", "risk"]),
   rows: z.array(z.record(z.string(), z.unknown())).max(1000),
 });
 
@@ -30,8 +38,8 @@ const NUMERIC_MONTH_FIELDS = [
   "loan_count",
   "loan_amount",
   "avg_loan_aging",
-  "interest_accrued",
-  "npl_value",
+  "aging_sum",
+  "aging_count",
   "amount_recovered",
   "amount_pending",
   "collection_amount",
@@ -43,7 +51,7 @@ const NUMERIC_MONTH_FIELDS = [
   "repayment_count",
 ] as const;
 
-/** Upserts a batch of customers or monthly rows. Existing rows are replaced. */
+/** Upserts a batch of customers, cumulative risk figures or monthly rows. */
 export const ingestBatch = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => payloadSchema.parse(input))
   .handler(async ({ data }) => {
@@ -63,6 +71,23 @@ export const ingestBatch = createServerFn({ method: "POST" })
           pl_balance: c.pl_balance ?? null,
           pos_installed: c.pos_installed ?? null,
           loan_type: c.loan_type ?? null,
+          onboarding_date: c.onboarding_date ?? null,
+          updated_at: new Date().toISOString(),
+        };
+      });
+      const { error } = await supabaseAdmin.from("customers").upsert(rows, { onConflict: "phone" });
+      if (error) throw new Error(error.message);
+      return { inserted: rows.length };
+    }
+
+    if (data.target === "risk") {
+      const rows = data.rows.map((r) => {
+        const c = riskSchema.parse(r);
+        return {
+          phone: c.phone,
+          total_pending: c.total_pending ?? null,
+          npl_value: c.npl_value ?? null,
+          max_loan_aging: c.max_loan_aging ?? null,
           updated_at: new Date().toISOString(),
         };
       });
@@ -105,8 +130,8 @@ export const ingestBatch = createServerFn({ method: "POST" })
         loan_count: pick("loan_count"),
         loan_amount: pick("loan_amount"),
         avg_loan_aging: pick("avg_loan_aging"),
-        interest_accrued: pick("interest_accrued"),
-        npl_value: pick("npl_value"),
+        aging_sum: pick("aging_sum"),
+        aging_count: pick("aging_count"),
         amount_recovered: pick("amount_recovered"),
         amount_pending: pick("amount_pending"),
         collection_amount: pick("collection_amount"),

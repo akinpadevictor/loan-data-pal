@@ -16,6 +16,8 @@ export type Database = {
     Tables: {
       customer_months: {
         Row: {
+          aging_count: number | null
+          aging_sum: number | null
           amount_pending: number | null
           amount_recovered: number | null
           avg_loan_aging: number | null
@@ -35,6 +37,8 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          aging_count?: number | null
+          aging_sum?: number | null
           amount_pending?: number | null
           amount_recovered?: number | null
           avg_loan_aging?: number | null
@@ -54,6 +58,8 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          aging_count?: number | null
+          aging_sum?: number | null
           amount_pending?: number | null
           amount_recovered?: number | null
           avg_loan_aging?: number | null
@@ -79,39 +85,51 @@ export type Database = {
           agent: string | null
           loan_type: string | null
           market: string | null
+          max_loan_aging: number | null
           name: string | null
+          npl_value: number | null
+          onboarding_date: string | null
           phone: string
           pl_balance: number | null
           pl_limit: number | null
           pos_installed: string | null
           ref: string | null
           state: string | null
+          total_pending: number | null
           updated_at: string
         }
         Insert: {
           agent?: string | null
           loan_type?: string | null
           market?: string | null
+          max_loan_aging?: number | null
           name?: string | null
+          npl_value?: number | null
+          onboarding_date?: string | null
           phone: string
           pl_balance?: number | null
           pl_limit?: number | null
           pos_installed?: string | null
           ref?: string | null
           state?: string | null
+          total_pending?: number | null
           updated_at?: string
         }
         Update: {
           agent?: string | null
           loan_type?: string | null
           market?: string | null
+          max_loan_aging?: number | null
           name?: string | null
+          npl_value?: number | null
+          onboarding_date?: string | null
           phone?: string
           pl_balance?: number | null
           pl_limit?: number | null
           pos_installed?: string | null
           ref?: string | null
           state?: string | null
+          total_pending?: number | null
           updated_at?: string
         }
         Relationships: []
