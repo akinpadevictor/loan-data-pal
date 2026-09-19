@@ -91,13 +91,15 @@ function UploadPage() {
           continue;
         }
 
-        let target: "customers" | "months" = "months";
+        let target: "customers" | "months" | "risk" = "months";
         let payload: Record<string, unknown>[] = [];
+        let riskPayload: Record<string, unknown>[] = [];
         if (dataset === "customer_overview") {
           target = "customers";
           payload = buildCustomers(rows) as unknown as Record<string, unknown>[];
         } else if (dataset === "loan_information") {
           payload = buildLoanMonths(rows) as unknown as Record<string, unknown>[];
+          riskPayload = buildLoanRisk(rows) as unknown as Record<string, unknown>[];
         } else if (dataset === "distributor_detail") {
           payload = buildCollectionMonths(rows) as unknown as Record<string, unknown>[];
         } else {
