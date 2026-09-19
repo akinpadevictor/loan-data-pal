@@ -54,6 +54,9 @@ function UploadPage() {
   const send = useServerFn(ingestBatch);
   const log = useServerFn(recordUpload);
   const queryClient = useQueryClient();
+  const claim = useServerFn(claimAdmin);
+
+  const access = useQuery({ queryKey: ["admin-access"], queryFn: () => claim({}) });
 
   const uploads = useQuery({
     queryKey: ["uploads"],
