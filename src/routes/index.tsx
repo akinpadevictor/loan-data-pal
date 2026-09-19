@@ -1,12 +1,18 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { Search, Phone, ArrowRight, Loader2, TriangleAlert } from "lucide-react";
+import { Search, Phone, ArrowRight, Loader2 } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { monthLabel, normalizePhone, windowMonths } from "@/lib/aggregate";
+import {
+  dateLabel,
+  monthLabel,
+  normalizePhone,
+  rollingAvgAging,
+  windowMonths,
+} from "@/lib/aggregate";
 
 export const Route = createFileRoute("/")({
   head: () => ({
