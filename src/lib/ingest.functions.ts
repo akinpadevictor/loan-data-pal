@@ -1,6 +1,19 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+
+/** Only accounts holding the admin role may refresh the data. */
+async function assertAdmin(context: { supabase: { rpc: Function }; userId: string }) {
+  const { data, error } = await (context.supabase.rpc as any)("has_role", {
+    _user_id: context.userId,
+    _role: "admin",
+  });
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error("Only an administrator can upload data.");
+}
+
+
 const customerSchema = z.object({
   phone: z.string().min(6),
   name: z.string().nullable().optional(),

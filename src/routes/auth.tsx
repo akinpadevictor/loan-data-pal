@@ -4,7 +4,6 @@ import { Loader2, LogIn } from "lucide-react";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -99,16 +98,6 @@ function AuthPage() {
         <Button type="submit" disabled={busy} className="h-11 w-full gap-2 font-semibold">
           {busy ? <Loader2 className="size-4 animate-spin" /> : <LogIn className="size-4" />}
           {mode === "signin" ? "Sign in" : "Create account"}
-        </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          className="h-11 w-full"
-          onClick={() =>
-            lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin })
-          }
-        >
-          Continue with Google
         </Button>
         <button
           type="button"
