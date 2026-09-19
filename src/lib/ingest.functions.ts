@@ -66,8 +66,10 @@ const NUMERIC_MONTH_FIELDS = [
 
 /** Upserts a batch of customers, cumulative risk figures or monthly rows. */
 export const ingestBatch = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => payloadSchema.parse(input))
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context as never);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     if (data.target === "customers") {
