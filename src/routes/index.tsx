@@ -138,7 +138,11 @@ function LookupPage() {
   const customer = search.data?.customer ?? null;
   const notFound = search.isSuccess && !customer && (search.data?.months.length ?? 0) === 0;
 
-  const rows: { label: string; hint?: string; get: (m: MonthRecord | undefined) => string }[] = [
+  const rows: {
+    label: string;
+    hint?: string;
+    get: (m: MonthRecord | undefined, month: string) => string;
+  }[] = [
     {
       label: "PL limit",
       hint: "Current assigned limit",
@@ -151,16 +155,14 @@ function LookupPage() {
     },
     { label: "Loans taken", get: (m) => plain(m?.loan_count ?? null) },
     {
-      label: "Loan aging",
-      hint: "Average loan age of loans taken",
-      get: (m) =>
-        m?.avg_loan_aging !== null && m?.avg_loan_aging !== undefined && m.avg_loan_aging > 20
-          ? `${plain(m.avg_loan_aging, " days")} · Possible NPL`
-          : plain(m?.avg_loan_aging ?? null, " days"),
+      label: "Total amount pending",
+      hint: "Outstanding on loans taken that month",
+      get: (m) => money(m?.amount_pending ?? null),
     },
     {
-      label: "Interest accrued",
-      get: (m) => money(m?.interest_accrued ?? null),
+      label: "Average loan aging",
+      hint: "Rolling average across the month and the two before it",
+      get: (_m, month) => plain(rollingAvgAging(month, byMonth), " days"),
     },
     {
       label: "NPL value",
