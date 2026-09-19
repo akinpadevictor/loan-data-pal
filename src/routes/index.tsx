@@ -95,7 +95,7 @@ function LookupPage() {
       const { data: months, error: monthsError } = await supabase
         .from("customer_months")
         .select(
-          "month, loan_count, loan_amount, avg_loan_aging, interest_accrued, npl_value, collection_amount, collection_active_days, pos_active_days, amount_pending",
+          "month, loan_count, loan_amount, avg_loan_aging, aging_sum, aging_count, npl_value, collection_amount, collection_active_days, pos_active_days, amount_pending",
         )
         .eq("phone", phone)
         .order("month", { ascending: false });
