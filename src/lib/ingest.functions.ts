@@ -168,8 +168,10 @@ export const ingestBatch = createServerFn({ method: "POST" })
 
 /** Records that a file finished uploading, for the "last updated" display. */
 export const recordUpload = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((input: { dataset: string; fileName: string; rows: number }) => input)
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context as never);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error } = await supabaseAdmin.from("data_uploads").insert({
       dataset: data.dataset,
@@ -178,4 +180,28 @@ export const recordUpload = createServerFn({ method: "POST" })
     });
     if (error) throw new Error(error.message);
     return { ok: true };
+  });
+
+/**
+ * The very first signed-in account becomes the administrator. Afterwards this
+ * does nothing, so nobody else can grant themselves upload rights.
+ */
+export const claimAdmin = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: admins, error } = await supabaseAdmin
+      .from("user_roles")
+      .select("user_id")
+      .eq("role", "admin")
+      .limit(1);
+    if (error) throw new Error(error.message);
+    if ((admins ?? []).length > 0) {
+      return { isAdmin: (admins ?? []).some((a) => a.user_id === context.userId) };
+    }
+    const { error: insertError } = await supabaseAdmin
+      .from("user_roles")
+      .insert({ user_id: context.userId, role: "admin" });
+    if (insertError) throw new Error(insertError.message);
+    return { isAdmin: true };
   });
