@@ -1,12 +1,18 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { Search, Phone, ArrowRight, Loader2, TriangleAlert } from "lucide-react";
+import { Search, Phone, ArrowRight, Loader2 } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { monthLabel, normalizePhone, windowMonths } from "@/lib/aggregate";
+import {
+  dateLabel,
+  monthLabel,
+  normalizePhone,
+  rollingAvgAging,
+  windowMonths,
+} from "@/lib/aggregate";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -41,6 +47,10 @@ type Customer = {
   pl_balance: number | null;
   pos_installed: string | null;
   loan_type: string | null;
+  onboarding_date: string | null;
+  total_pending: number | null;
+  npl_value: number | null;
+  max_loan_aging: number | null;
 };
 
 type MonthRecord = {
@@ -48,12 +58,12 @@ type MonthRecord = {
   loan_count: number | null;
   loan_amount: number | null;
   avg_loan_aging: number | null;
-  interest_accrued: number | null;
+  aging_sum: number | null;
+  aging_count: number | null;
   npl_value: number | null;
   collection_amount: number | null;
   collection_active_days: number | null;
   pos_active_days: number | null;
-  repayment_amount: number | null;
   amount_pending: number | null;
 };
 
@@ -85,7 +95,7 @@ function LookupPage() {
       const { data: months, error: monthsError } = await supabase
         .from("customer_months")
         .select(
-          "month, loan_count, loan_amount, avg_loan_aging, interest_accrued, npl_value, collection_amount, collection_active_days, pos_active_days, amount_pending",
+          "month, loan_count, loan_amount, avg_loan_aging, aging_sum, aging_count, npl_value, collection_amount, collection_active_days, pos_active_days, amount_pending",
         )
         .eq("phone", phone)
         .order("month", { ascending: false });
@@ -128,7 +138,11 @@ function LookupPage() {
   const customer = search.data?.customer ?? null;
   const notFound = search.isSuccess && !customer && (search.data?.months.length ?? 0) === 0;
 
-  const rows: { label: string; hint?: string; get: (m: MonthRecord | undefined) => string }[] = [
+  const rows: {
+    label: string;
+    hint?: string;
+    get: (m: MonthRecord | undefined, month: string) => string;
+  }[] = [
     {
       label: "PL limit",
       hint: "Current assigned limit",
@@ -141,16 +155,14 @@ function LookupPage() {
     },
     { label: "Loans taken", get: (m) => plain(m?.loan_count ?? null) },
     {
-      label: "Loan aging",
-      hint: "Average loan age of loans taken",
-      get: (m) =>
-        m?.avg_loan_aging !== null && m?.avg_loan_aging !== undefined && m.avg_loan_aging > 20
-          ? `${plain(m.avg_loan_aging, " days")} · Possible NPL`
-          : plain(m?.avg_loan_aging ?? null, " days"),
+      label: "Total amount pending",
+      hint: "Outstanding on loans taken that month",
+      get: (m) => money(m?.amount_pending ?? null),
     },
     {
-      label: "Interest accrued",
-      get: (m) => money(m?.interest_accrued ?? null),
+      label: "Average loan aging",
+      hint: "Rolling average across the month and the two before it",
+      get: (_m, month) => plain(rollingAvgAging(month, byMonth), " days"),
     },
     {
       label: "NPL value",

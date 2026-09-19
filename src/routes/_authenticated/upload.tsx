@@ -8,19 +8,20 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { ingestBatch, recordUpload } from "@/lib/ingest.functions";
+import { claimAdmin, ingestBatch, recordUpload } from "@/lib/ingest.functions";
 import {
   DATASET_LABELS,
   buildCollectionMonths,
   buildCustomers,
   buildLoanMonths,
+  buildLoanRisk,
   buildRepaymentMonths,
   detectDataset,
   type Dataset,
   type MonthRow,
 } from "@/lib/aggregate";
 
-export const Route = createFileRoute("/upload")({
+export const Route = createFileRoute("/_authenticated/upload")({
   head: () => ({
     meta: [
       { title: "Update Data — Credit Lens" },
@@ -53,6 +54,9 @@ function UploadPage() {
   const send = useServerFn(ingestBatch);
   const log = useServerFn(recordUpload);
   const queryClient = useQueryClient();
+  const claim = useServerFn(claimAdmin);
+
+  const access = useQuery({ queryKey: ["admin-access"], queryFn: () => claim({}) });
 
   const uploads = useQuery({
     queryKey: ["uploads"],
@@ -90,13 +94,15 @@ function UploadPage() {
           continue;
         }
 
-        let target: "customers" | "months" = "months";
+        let target: "customers" | "months" | "risk" = "months";
         let payload: Record<string, unknown>[] = [];
+        let riskPayload: Record<string, unknown>[] = [];
         if (dataset === "customer_overview") {
           target = "customers";
           payload = buildCustomers(rows) as unknown as Record<string, unknown>[];
         } else if (dataset === "loan_information") {
           payload = buildLoanMonths(rows) as unknown as Record<string, unknown>[];
+          riskPayload = buildLoanRisk(rows) as unknown as Record<string, unknown>[];
         } else if (dataset === "distributor_detail") {
           payload = buildCollectionMonths(rows) as unknown as Record<string, unknown>[];
         } else {
@@ -107,6 +113,10 @@ function UploadPage() {
           await send({ data: { target, rows: payload.slice(i, i + BATCH) } });
           const fileShare = (i + BATCH) / payload.length;
           setProgress(Math.min(99, ((f + Math.min(fileShare, 1)) / fileList.length) * 100));
+        }
+
+        for (let i = 0; i < riskPayload.length; i += BATCH) {
+          await send({ data: { target: "risk", rows: riskPayload.slice(i, i + BATCH) } });
         }
 
         await log({ data: { dataset, fileName: file.name, rows: payload.length } });
@@ -127,6 +137,29 @@ function UploadPage() {
       if (inputRef.current) inputRef.current.value = "";
     }
   };
+
+  if (access.data && !access.data.isAdmin) {
+    return (
+      <main className="mx-auto max-w-2xl px-5 pb-20 pt-16">
+        <div className="panel p-6">
+          <h1 className="text-xl font-bold">You cannot update the data</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            This account is signed in, but only the owner account can upload new files.
+          </p>
+          <Button
+            className="mt-5"
+            variant="secondary"
+            onClick={async () => {
+              await supabase.auth.signOut();
+              window.location.href = "/auth";
+            }}
+          >
+            Sign out
+          </Button>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="mx-auto max-w-4xl px-5 pb-20 pt-10">

@@ -1,6 +1,19 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+
+/** Only accounts holding the admin role may refresh the data. */
+async function assertAdmin(context: { supabase: { rpc: Function }; userId: string }) {
+  const { data, error } = await (context.supabase.rpc as any)("has_role", {
+    _user_id: context.userId,
+    _role: "admin",
+  });
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error("Only an administrator can upload data.");
+}
+
+
 const customerSchema = z.object({
   phone: z.string().min(6),
   name: z.string().nullable().optional(),
@@ -53,8 +66,10 @@ const NUMERIC_MONTH_FIELDS = [
 
 /** Upserts a batch of customers, cumulative risk figures or monthly rows. */
 export const ingestBatch = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => payloadSchema.parse(input))
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context as never);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     if (data.target === "customers") {
@@ -153,8 +168,10 @@ export const ingestBatch = createServerFn({ method: "POST" })
 
 /** Records that a file finished uploading, for the "last updated" display. */
 export const recordUpload = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((input: { dataset: string; fileName: string; rows: number }) => input)
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context as never);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error } = await supabaseAdmin.from("data_uploads").insert({
       dataset: data.dataset,
@@ -163,4 +180,28 @@ export const recordUpload = createServerFn({ method: "POST" })
     });
     if (error) throw new Error(error.message);
     return { ok: true };
+  });
+
+/**
+ * The very first signed-in account becomes the administrator. Afterwards this
+ * does nothing, so nobody else can grant themselves upload rights.
+ */
+export const claimAdmin = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: admins, error } = await supabaseAdmin
+      .from("user_roles")
+      .select("user_id")
+      .eq("role", "admin")
+      .limit(1);
+    if (error) throw new Error(error.message);
+    if ((admins ?? []).length > 0) {
+      return { isAdmin: (admins ?? []).some((a) => a.user_id === context.userId) };
+    }
+    const { error: insertError } = await supabaseAdmin
+      .from("user_roles")
+      .insert({ user_id: context.userId, role: "admin" });
+    if (insertError) throw new Error(insertError.message);
+    return { isAdmin: true };
   });
