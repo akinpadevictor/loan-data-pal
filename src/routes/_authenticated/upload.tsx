@@ -8,12 +8,13 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { ingestBatch, recordUpload } from "@/lib/ingest.functions";
+import { claimAdmin, ingestBatch, recordUpload } from "@/lib/ingest.functions";
 import {
   DATASET_LABELS,
   buildCollectionMonths,
   buildCustomers,
   buildLoanMonths,
+  buildLoanRisk,
   buildRepaymentMonths,
   detectDataset,
   type Dataset,
