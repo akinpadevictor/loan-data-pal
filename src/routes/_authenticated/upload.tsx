@@ -138,6 +138,29 @@ function UploadPage() {
     }
   };
 
+  if (access.data && !access.data.isAdmin) {
+    return (
+      <main className="mx-auto max-w-2xl px-5 pb-20 pt-16">
+        <div className="panel p-6">
+          <h1 className="text-xl font-bold">You cannot update the data</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            This account is signed in, but only the owner account can upload new files.
+          </p>
+          <Button
+            className="mt-5"
+            variant="secondary"
+            onClick={async () => {
+              await supabase.auth.signOut();
+              window.location.href = "/auth";
+            }}
+          >
+            Sign out
+          </Button>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="mx-auto max-w-4xl px-5 pb-20 pt-10">
       <p className="label-caps">Daily refresh</p>
