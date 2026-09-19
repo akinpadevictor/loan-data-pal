@@ -112,6 +112,10 @@ function UploadPage() {
           setProgress(Math.min(99, ((f + Math.min(fileShare, 1)) / fileList.length) * 100));
         }
 
+        for (let i = 0; i < riskPayload.length; i += BATCH) {
+          await send({ data: { target: "risk", rows: riskPayload.slice(i, i + BATCH) } });
+        }
+
         await log({ data: { dataset, fileName: file.name, rows: payload.length } });
         setStatuses((prev) => [
           ...prev,
