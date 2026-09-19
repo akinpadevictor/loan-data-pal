@@ -47,6 +47,10 @@ type Customer = {
   pl_balance: number | null;
   pos_installed: string | null;
   loan_type: string | null;
+  onboarding_date: string | null;
+  total_pending: number | null;
+  npl_value: number | null;
+  max_loan_aging: number | null;
 };
 
 type MonthRecord = {
@@ -54,12 +58,12 @@ type MonthRecord = {
   loan_count: number | null;
   loan_amount: number | null;
   avg_loan_aging: number | null;
-  interest_accrued: number | null;
+  aging_sum: number | null;
+  aging_count: number | null;
   npl_value: number | null;
   collection_amount: number | null;
   collection_active_days: number | null;
   pos_active_days: number | null;
-  repayment_amount: number | null;
   amount_pending: number | null;
 };
 
