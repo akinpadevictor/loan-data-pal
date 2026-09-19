@@ -20,7 +20,7 @@ import {
   type MonthRow,
 } from "@/lib/aggregate";
 
-export const Route = createFileRoute("/upload")({
+export const Route = createFileRoute("/_authenticated/upload")({
   head: () => ({
     meta: [
       { title: "Update Data — Credit Lens" },

@@ -10,43 +10,43 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as UploadRouteImport } from './routes/upload'
+import { Route as AuthenticatedUploadRouteImport } from './routes/_authenticated/upload'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const UploadRoute = UploadRouteImport.update({
-  id: '/upload',
+const AuthenticatedUploadRoute = AuthenticatedUploadRouteImport.update({
+  id: '/_authenticated/upload',
   path: '/upload',
   getParentRoute: () => rootRouteImport,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/upload': typeof UploadRoute
+  '/upload': typeof AuthenticatedUploadRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/upload': typeof UploadRoute
+  '/upload': typeof AuthenticatedUploadRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/upload': typeof UploadRoute
+  '/_authenticated/upload': typeof AuthenticatedUploadRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths: '/' | '/upload'
   fileRoutesByTo: FileRoutesByTo
   to: '/' | '/upload'
-  id: '__root__' | '/' | '/upload'
+  id: '__root__' | '/' | '/_authenticated/upload'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  UploadRoute: typeof UploadRoute
+  AuthenticatedUploadRoute: typeof AuthenticatedUploadRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -58,11 +58,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/upload': {
-      id: '/upload'
+    '/_authenticated/upload': {
+      id: '/_authenticated/upload'
       path: '/upload'
       fullPath: '/upload'
-      preLoaderRoute: typeof UploadRouteImport
+      preLoaderRoute: typeof AuthenticatedUploadRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -70,7 +70,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  UploadRoute: UploadRoute,
+  AuthenticatedUploadRoute: AuthenticatedUploadRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
