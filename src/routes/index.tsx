@@ -165,11 +165,6 @@ function LookupPage() {
       get: (_m, month) => plain(rollingAvgAging(month, byMonth), " days"),
     },
     {
-      label: "NPL value",
-      hint: "Pending value on loans aged above 20 days",
-      get: (m) => money(m?.npl_value ?? null),
-    },
-    {
       label: "Collection amount",
       get: (m) => money(m?.collection_amount ?? null),
     },
@@ -259,12 +254,26 @@ function LookupPage() {
             </div>
 
             <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <Stat label="Onboarding date" value={dateLabel(customer.onboarding_date)} small />
               <Stat label="PL limit" value={money(customer.pl_limit)} tone="primary" />
               <Stat
                 label="PL balance (current)"
                 value={money(customer.pl_balance)}
                 tone="accent"
               />
+              <Stat label="Total amount pending" value={money(customer.total_pending)} />
+            </div>
+
+            <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <Stat
+                label="NPL value"
+                value={`${money(customer.npl_value ?? 0)}${
+                  (customer.npl_value ?? 0) > 0 && customer.max_loan_aging !== null
+                    ? ` (${plain(customer.max_loan_aging)} days)`
+                    : ""
+                }`}
+              />
+              <Stat label="Highest loan aging" value={plain(customer.max_loan_aging, " days")} small />
               <Stat label="Agent" value={customer.agent ?? "—"} small />
               <Stat
                 label="POS installed"
@@ -329,17 +338,7 @@ function LookupPage() {
                       </td>
                       {shownMonths.map((m) => (
                         <td key={m} className="numeric px-5 py-3 text-right">
-                          {row.label === "Loan aging" &&
-                          (byMonth.get(m)?.avg_loan_aging ?? 0) > 20 ? (
-                            <span className="inline-flex flex-col items-end gap-1">
-                              <span>{plain(byMonth.get(m)?.avg_loan_aging, " days")}</span>
-                              <span className="inline-flex items-center gap-1 text-xs font-semibold text-warning">
-                                <TriangleAlert className="size-3" /> Possible NPL
-                              </span>
-                            </span>
-                          ) : (
-                            row.get(byMonth.get(m))
-                          )}
+                          {row.get(byMonth.get(m), m)}
                         </td>
                       ))}
                     </tr>
