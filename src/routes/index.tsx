@@ -165,11 +165,6 @@ function LookupPage() {
       get: (_m, month) => plain(rollingAvgAging(month, byMonth), " days"),
     },
     {
-      label: "NPL value",
-      hint: "Pending value on loans aged above 20 days",
-      get: (m) => money(m?.npl_value ?? null),
-    },
-    {
       label: "Collection amount",
       get: (m) => money(m?.collection_amount ?? null),
     },
