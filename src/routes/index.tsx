@@ -329,17 +329,7 @@ function LookupPage() {
                       </td>
                       {shownMonths.map((m) => (
                         <td key={m} className="numeric px-5 py-3 text-right">
-                          {row.label === "Loan aging" &&
-                          (byMonth.get(m)?.avg_loan_aging ?? 0) > 20 ? (
-                            <span className="inline-flex flex-col items-end gap-1">
-                              <span>{plain(byMonth.get(m)?.avg_loan_aging, " days")}</span>
-                              <span className="inline-flex items-center gap-1 text-xs font-semibold text-warning">
-                                <TriangleAlert className="size-3" /> Possible NPL
-                              </span>
-                            </span>
-                          ) : (
-                            row.get(byMonth.get(m))
-                          )}
+                          {row.get(byMonth.get(m), m)}
                         </td>
                       ))}
                     </tr>
