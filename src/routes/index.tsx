@@ -268,7 +268,7 @@ function LookupPage() {
               <Stat
                 label="NPL value"
                 value={`${money(customer.npl_value ?? 0)}${
-                  (customer.max_loan_aging ?? 0) > 20
+                  (customer.npl_value ?? 0) > 0 && customer.max_loan_aging !== null
                     ? ` (${plain(customer.max_loan_aging)} days)`
                     : ""
                 }`}
