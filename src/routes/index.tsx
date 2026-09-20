@@ -259,12 +259,26 @@ function LookupPage() {
             </div>
 
             <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <Stat label="Onboarding date" value={dateLabel(customer.onboarding_date)} small />
               <Stat label="PL limit" value={money(customer.pl_limit)} tone="primary" />
               <Stat
                 label="PL balance (current)"
                 value={money(customer.pl_balance)}
                 tone="accent"
               />
+              <Stat label="Total amount pending" value={money(customer.total_pending)} />
+            </div>
+
+            <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <Stat
+                label="NPL value"
+                value={`${money(customer.npl_value ?? 0)}${
+                  (customer.max_loan_aging ?? 0) > 20
+                    ? ` (${plain(customer.max_loan_aging)} days)`
+                    : ""
+                }`}
+              />
+              <Stat label="Highest loan aging" value={plain(customer.max_loan_aging, " days")} small />
               <Stat label="Agent" value={customer.agent ?? "—"} small />
               <Stat
                 label="POS installed"
