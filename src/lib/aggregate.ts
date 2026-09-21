@@ -40,6 +40,7 @@ export type MonthRow = {
   collection_amount?: number | null;
   collection_active_days?: number | null;
   pos_active_days?: number | null;
+  wallet_active_days?: number | null;
   pos_collection?: number | null;
   txn_count?: number | null;
   repayment_amount?: number | null;
@@ -250,6 +251,8 @@ export function buildCollectionMonths(rows: Row[], refMap?: RefMap): MonthRow[] 
     b.collection_active_days = (b.collection_active_days ?? 0) + (num(row["Active Days"]) ?? 0);
     b.pos_active_days = (b.pos_active_days ?? 0) + (num(row["Active Days POS"]) ?? 0);
     b.pos_collection = (b.pos_collection ?? 0) + (num(row["POS Collection"]) ?? 0);
+    b.wallet_active_days =
+      (b.wallet_active_days ?? 0) + (activeDayFlag(row["Active Days Wallet"], row["Wallet Collection"]) ?? 0);
     b.txn_count = (b.txn_count ?? 0) + (num(row["No of Transactions"]) ?? 0);
   }
   return [...map.values()] as MonthRow[];
