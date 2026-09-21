@@ -191,9 +191,9 @@ function LookupPage() {
       get: (m) => money(m?.amount_pending ?? null),
     },
     {
-      label: "Average loan aging",
+      label: "Average repayment days",
       hint: "Rolling average across the month and the two before it",
-      get: (_m, month) => plain(rollingAvgAging(month, byMonth), " days"),
+      get: (_m, month) => whole(rollingAvgAging(month, byMonth), " days"),
     },
     {
       label: "Collection amount",
@@ -204,10 +204,16 @@ function LookupPage() {
       get: (m) => plain(m?.collection_active_days ?? null),
     },
     {
+      label: "Wallet active days",
+      get: (m) => plain(m?.wallet_active_days ?? null),
+    },
+    {
       label: "POS active days",
       get: (m) => plain(m?.pos_active_days ?? null),
     },
   ];
+
+  const repayments = search.data?.repayments ?? [];
 
   return (
     <main className="mx-auto max-w-6xl px-5 pb-20 pt-10">
