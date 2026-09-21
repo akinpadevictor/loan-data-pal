@@ -15,6 +15,7 @@ import {
   buildCustomers,
   buildLoanMonths,
   buildLoanRisk,
+  buildLastRepayments,
   buildRepaymentMonths,
   detectDataset,
   type Dataset,
