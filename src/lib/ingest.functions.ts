@@ -42,8 +42,15 @@ const monthSchema = z
   })
   .catchall(z.union([z.number(), z.string(), z.null()]));
 
+const repaymentSchema = z.object({
+  phone: z.string().min(6),
+  txn_at: z.string().min(4),
+  amount: z.number(),
+  loan_id: z.string().nullable().optional(),
+});
+
 const payloadSchema = z.object({
-  target: z.enum(["customers", "months", "risk"]),
+  target: z.enum(["customers", "months", "risk", "repayments"]),
   rows: z.array(z.record(z.string(), z.unknown())).max(1000),
 });
 
@@ -58,6 +65,7 @@ const NUMERIC_MONTH_FIELDS = [
   "collection_amount",
   "collection_active_days",
   "pos_active_days",
+  "wallet_active_days",
   "pos_collection",
   "txn_count",
   "repayment_amount",
