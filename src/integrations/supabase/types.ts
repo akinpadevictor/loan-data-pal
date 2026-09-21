@@ -35,6 +35,7 @@ export type Database = {
           repayment_count: number | null
           txn_count: number | null
           updated_at: string
+          wallet_active_days: number | null
         }
         Insert: {
           aging_count?: number | null
@@ -56,6 +57,7 @@ export type Database = {
           repayment_count?: number | null
           txn_count?: number | null
           updated_at?: string
+          wallet_active_days?: number | null
         }
         Update: {
           aging_count?: number | null
@@ -76,6 +78,31 @@ export type Database = {
           repayment_amount?: number | null
           repayment_count?: number | null
           txn_count?: number | null
+          updated_at?: string
+          wallet_active_days?: number | null
+        }
+        Relationships: []
+      }
+      customer_repayments: {
+        Row: {
+          amount: number
+          loan_id: string | null
+          phone: string
+          txn_at: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          loan_id?: string | null
+          phone: string
+          txn_at: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          loan_id?: string | null
+          phone?: string
+          txn_at?: string
           updated_at?: string
         }
         Relationships: []

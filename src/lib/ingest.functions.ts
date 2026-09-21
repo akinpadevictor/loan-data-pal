@@ -42,8 +42,15 @@ const monthSchema = z
   })
   .catchall(z.union([z.number(), z.string(), z.null()]));
 
+const repaymentSchema = z.object({
+  phone: z.string().min(6),
+  txn_at: z.string().min(4),
+  amount: z.number(),
+  loan_id: z.string().nullable().optional(),
+});
+
 const payloadSchema = z.object({
-  target: z.enum(["customers", "months", "risk"]),
+  target: z.enum(["customers", "months", "risk", "repayments"]),
   rows: z.array(z.record(z.string(), z.unknown())).max(1000),
 });
 
@@ -58,6 +65,7 @@ const NUMERIC_MONTH_FIELDS = [
   "collection_amount",
   "collection_active_days",
   "pos_active_days",
+  "wallet_active_days",
   "pos_collection",
   "txn_count",
   "repayment_amount",
@@ -111,6 +119,31 @@ export const ingestBatch = createServerFn({ method: "POST" })
       return { inserted: rows.length };
     }
 
+    if (data.target === "repayments") {
+      const rows = data.rows.map((r) => {
+        const c = repaymentSchema.parse(r);
+        return {
+          phone: c.phone,
+          txn_at: c.txn_at,
+          amount: c.amount,
+          loan_id: c.loan_id ?? null,
+          updated_at: new Date().toISOString(),
+        };
+      });
+      // Replace each customer's stored repayments so only the latest three remain.
+      const phones = [...new Set(rows.map((r) => r.phone))];
+      const { error: clearError } = await supabaseAdmin
+        .from("customer_repayments")
+        .delete()
+        .in("phone", phones);
+      if (clearError) throw new Error(clearError.message);
+      const { error } = await supabaseAdmin
+        .from("customer_repayments")
+        .upsert(rows, { onConflict: "phone,txn_at,amount" });
+      if (error) throw new Error(error.message);
+      return { inserted: rows.length };
+    }
+
     // Merge the incoming monthly figures with whatever is already stored for
     // those months so uploading one file never wipes another file's numbers.
     const rows = data.rows.map((r) => monthSchema.parse(r));
@@ -152,6 +185,7 @@ export const ingestBatch = createServerFn({ method: "POST" })
         collection_amount: pick("collection_amount"),
         collection_active_days: pick("collection_active_days"),
         pos_active_days: pick("pos_active_days"),
+        wallet_active_days: pick("wallet_active_days"),
         pos_collection: pick("pos_collection"),
         txn_count: pick("txn_count"),
         repayment_amount: pick("repayment_amount"),

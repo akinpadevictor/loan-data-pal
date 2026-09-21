@@ -64,7 +64,14 @@ type MonthRecord = {
   collection_amount: number | null;
   collection_active_days: number | null;
   pos_active_days: number | null;
+  wallet_active_days: number | null;
   amount_pending: number | null;
+};
+
+type Repayment = {
+  txn_at: string;
+  amount: number | null;
+  loan_id: string | null;
 };
 
 const money = (v: number | null | undefined) =>
@@ -74,6 +81,21 @@ const money = (v: number | null | undefined) =>
 
 const plain = (v: number | null | undefined, suffix = "") =>
   v === null || v === undefined ? "—" : `${Math.round(v * 10) / 10}${suffix}`;
+
+const whole = (v: number | null | undefined, suffix = "") =>
+  v === null || v === undefined ? "—" : `${Math.round(v).toLocaleString()}${suffix}`;
+
+const dateTimeLabel = (value: string) => {
+  const d = new Date(value);
+  return Number.isNaN(d.getTime())
+    ? "—"
+    : d.toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        timeZone: "UTC",
+      });
+};
 
 function LookupPage() {
   const [input, setInput] = useState("");
@@ -95,15 +117,24 @@ function LookupPage() {
       const { data: months, error: monthsError } = await supabase
         .from("customer_months")
         .select(
-          "month, loan_count, loan_amount, avg_loan_aging, aging_sum, aging_count, npl_value, collection_amount, collection_active_days, pos_active_days, amount_pending",
+          "month, loan_count, loan_amount, avg_loan_aging, aging_sum, aging_count, npl_value, collection_amount, collection_active_days, pos_active_days, wallet_active_days, amount_pending",
         )
         .eq("phone", phone)
         .order("month", { ascending: false });
       if (monthsError) throw monthsError;
 
+      const { data: repayments, error: repaymentsError } = await supabase
+        .from("customer_repayments")
+        .select("txn_at, amount, loan_id")
+        .eq("phone", phone)
+        .order("txn_at", { ascending: false })
+        .limit(3);
+      if (repaymentsError) throw repaymentsError;
+
       return {
         customer: (customer ?? null) as Customer | null,
         months: (months ?? []) as MonthRecord[],
+        repayments: (repayments ?? []) as Repayment[],
       };
     },
   });
@@ -160,9 +191,9 @@ function LookupPage() {
       get: (m) => money(m?.amount_pending ?? null),
     },
     {
-      label: "Average loan aging",
+      label: "Average repayment days",
       hint: "Rolling average across the month and the two before it",
-      get: (_m, month) => plain(rollingAvgAging(month, byMonth), " days"),
+      get: (_m, month) => whole(rollingAvgAging(month, byMonth), " days"),
     },
     {
       label: "Collection amount",
@@ -173,10 +204,16 @@ function LookupPage() {
       get: (m) => plain(m?.collection_active_days ?? null),
     },
     {
+      label: "Wallet active days",
+      get: (m) => plain(m?.wallet_active_days ?? null),
+    },
+    {
       label: "POS active days",
       get: (m) => plain(m?.pos_active_days ?? null),
     },
   ];
+
+  const repayments = search.data?.repayments ?? [];
 
   return (
     <main className="mx-auto max-w-6xl px-5 pb-20 pt-10">
@@ -374,6 +411,30 @@ function LookupPage() {
                   })}
                 </div>
               </div>
+            )}
+          </div>
+
+          <div className="panel p-6">
+            <h3 className="text-sm font-semibold">Last 3 repayments</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              The three most recent repayments recorded for this customer.
+            </p>
+            {repayments.length > 0 ? (
+              <ul className="mt-4 divide-y divide-border/60 text-sm">
+                {repayments.map((r) => (
+                  <li
+                    key={`${r.txn_at}-${r.amount}`}
+                    className="flex flex-wrap items-center gap-3 py-3"
+                  >
+                    <span className="numeric font-semibold">{money(r.amount)}</span>
+                    <span className="numeric ml-auto text-xs text-muted-foreground">
+                      {dateTimeLabel(r.txn_at)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-4 text-sm text-muted-foreground">No repayments recorded yet.</p>
             )}
           </div>
         </section>

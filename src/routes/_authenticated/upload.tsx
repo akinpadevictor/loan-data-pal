@@ -15,6 +15,7 @@ import {
   buildCustomers,
   buildLoanMonths,
   buildLoanRisk,
+  buildLastRepayments,
   buildRepaymentMonths,
   detectDataset,
   type Dataset,
@@ -97,6 +98,7 @@ function UploadPage() {
         let target: "customers" | "months" | "risk" = "months";
         let payload: Record<string, unknown>[] = [];
         let riskPayload: Record<string, unknown>[] = [];
+        let repaymentPayload: Record<string, unknown>[] = [];
         if (dataset === "customer_overview") {
           target = "customers";
           payload = buildCustomers(rows) as unknown as Record<string, unknown>[];
@@ -107,6 +109,7 @@ function UploadPage() {
           payload = buildCollectionMonths(rows) as unknown as Record<string, unknown>[];
         } else {
           payload = buildRepaymentMonths(rows) as unknown as Record<string, unknown>[];
+          repaymentPayload = buildLastRepayments(rows) as unknown as Record<string, unknown>[];
         }
 
         for (let i = 0; i < payload.length; i += BATCH) {
@@ -117,6 +120,12 @@ function UploadPage() {
 
         for (let i = 0; i < riskPayload.length; i += BATCH) {
           await send({ data: { target: "risk", rows: riskPayload.slice(i, i + BATCH) } });
+        }
+
+        for (let i = 0; i < repaymentPayload.length; i += BATCH) {
+          await send({
+            data: { target: "repayments", rows: repaymentPayload.slice(i, i + BATCH) },
+          });
         }
 
         await log({ data: { dataset, fileName: file.name, rows: payload.length } });

@@ -40,6 +40,7 @@ export type MonthRow = {
   collection_amount?: number | null;
   collection_active_days?: number | null;
   pos_active_days?: number | null;
+  wallet_active_days?: number | null;
   pos_collection?: number | null;
   txn_count?: number | null;
   repayment_amount?: number | null;
@@ -242,6 +243,16 @@ export function buildLoanRisk(rows: Row[], refMap?: RefMap): RiskRow[] {
   return [...map.values()];
 }
 
+/**
+ * Active-day flag for a channel. The spreadsheet stores these as formulas, so
+ * when the cached numeric value is missing we derive it from the amount.
+ */
+function activeDayFlag(flag: unknown, amount: unknown): number {
+  const direct = num(flag);
+  if (direct !== null) return direct > 0 ? 1 : 0;
+  return (num(amount) ?? 0) >= 1 ? 1 : 0;
+}
+
 export function buildCollectionMonths(rows: Row[], refMap?: RefMap): MonthRow[] {
   const { map, out } = bucketize(rows, (r) => toMonth(r["Date"]), refMap);
   for (const { bucket, row } of out) {
@@ -250,6 +261,8 @@ export function buildCollectionMonths(rows: Row[], refMap?: RefMap): MonthRow[] 
     b.collection_active_days = (b.collection_active_days ?? 0) + (num(row["Active Days"]) ?? 0);
     b.pos_active_days = (b.pos_active_days ?? 0) + (num(row["Active Days POS"]) ?? 0);
     b.pos_collection = (b.pos_collection ?? 0) + (num(row["POS Collection"]) ?? 0);
+    b.wallet_active_days =
+      (b.wallet_active_days ?? 0) + (activeDayFlag(row["Active Days Wallet"], row["Wallet Collection"]) ?? 0);
     b.txn_count = (b.txn_count ?? 0) + (num(row["No of Transactions"]) ?? 0);
   }
   return [...map.values()] as MonthRow[];
@@ -266,6 +279,39 @@ export function buildRepaymentMonths(rows: Row[], refMap?: RefMap): MonthRow[] {
     b.repayment_count = (b.repayment_count ?? 0) + 1;
   }
   return [...map.values()] as MonthRow[];
+}
+
+export type RepaymentRow = {
+  phone: string;
+  txn_at: string;
+  amount: number;
+  loan_id: string | null;
+};
+
+/** The three most recent "amountrepaid" transactions for each customer. */
+export function buildLastRepayments(rows: Row[], refMap?: RefMap, keep = 3): RepaymentRow[] {
+  const map = new Map<string, RepaymentRow[]>();
+  for (const r of rows) {
+    if (String(r["TRANSACTIONTYPE"] ?? "").toLowerCase() !== "amountrepaid") continue;
+    const phone = keyOf(r, refMap);
+    const when = excelDate(r["TRANSACTIONDATE"]);
+    const amount = num(r["AMOUNT"]);
+    if (!phone || !when || amount === null) continue;
+    const list = map.get(phone) ?? [];
+    list.push({
+      phone,
+      txn_at: when.toISOString(),
+      amount,
+      loan_id: str(r["LOANID"]),
+    });
+    map.set(phone, list);
+  }
+  const out: RepaymentRow[] = [];
+  for (const list of map.values()) {
+    list.sort((a, b) => b.txn_at.localeCompare(a.txn_at));
+    out.push(...list.slice(0, keep));
+  }
+  return out;
 }
 
 /** Sorted list of the selected month plus the three months before it. */
