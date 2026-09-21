@@ -413,6 +413,30 @@ function LookupPage() {
               </div>
             )}
           </div>
+
+          <div className="panel p-6">
+            <h3 className="text-sm font-semibold">Last 3 repayments</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              The three most recent repayments recorded for this customer.
+            </p>
+            {repayments.length > 0 ? (
+              <ul className="mt-4 divide-y divide-border/60 text-sm">
+                {repayments.map((r) => (
+                  <li
+                    key={`${r.txn_at}-${r.amount}`}
+                    className="flex flex-wrap items-center gap-3 py-3"
+                  >
+                    <span className="numeric font-semibold">{money(r.amount)}</span>
+                    <span className="numeric ml-auto text-xs text-muted-foreground">
+                      {dateTimeLabel(r.txn_at)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-4 text-sm text-muted-foreground">No repayments recorded yet.</p>
+            )}
+          </div>
         </section>
       )}
 
