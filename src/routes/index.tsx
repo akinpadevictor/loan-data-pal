@@ -64,7 +64,14 @@ type MonthRecord = {
   collection_amount: number | null;
   collection_active_days: number | null;
   pos_active_days: number | null;
+  wallet_active_days: number | null;
   amount_pending: number | null;
+};
+
+type Repayment = {
+  txn_at: string;
+  amount: number | null;
+  loan_id: string | null;
 };
 
 const money = (v: number | null | undefined) =>
@@ -74,6 +81,21 @@ const money = (v: number | null | undefined) =>
 
 const plain = (v: number | null | undefined, suffix = "") =>
   v === null || v === undefined ? "—" : `${Math.round(v * 10) / 10}${suffix}`;
+
+const whole = (v: number | null | undefined, suffix = "") =>
+  v === null || v === undefined ? "—" : `${Math.round(v).toLocaleString()}${suffix}`;
+
+const dateTimeLabel = (value: string) => {
+  const d = new Date(value);
+  return Number.isNaN(d.getTime())
+    ? "—"
+    : d.toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        timeZone: "UTC",
+      });
+};
 
 function LookupPage() {
   const [input, setInput] = useState("");
