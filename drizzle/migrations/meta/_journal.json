@@ -15,6 +15,13 @@
       "when": 1789777804812,
       "tag": "0001_create_user_roles",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789967953251,
+      "tag": "0002_add_wallet_days_and_repayments",
+      "breakpoints": true
     }
   ]
 }
