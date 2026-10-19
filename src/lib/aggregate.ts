@@ -57,6 +57,8 @@ export const DATASET_LABELS: Record<Dataset, string> = {
 /** Loans aged above this many days count towards the NPL value. */
 export const NPL_AGING_DAYS = 20;
 
+const HIGHEST_AGING_LOAN_CLASSES = new Set(["active", "bad loan", "np loan"]);
+
 export function normalizePhone(value: unknown): string {
   const digits = String(value ?? "").replace(/\D/g, "");
   return digits.length >= 10 ? digits.slice(-10) : "";
@@ -236,7 +238,14 @@ export function buildLoanRisk(rows: Row[], refMap?: RefMap): RiskRow[] {
     entry.total_pending = (entry.total_pending ?? 0) + pending;
     const aging = loanAgingDays(r["Loan Aging"]);
     if (aging !== null) {
-      if (entry.max_loan_aging === null || aging > entry.max_loan_aging) entry.max_loan_aging = aging;
+      const loanClass = str(r["Loan Class"])?.toLowerCase();
+      if (
+        loanClass &&
+        HIGHEST_AGING_LOAN_CLASSES.has(loanClass) &&
+        (entry.max_loan_aging === null || aging > entry.max_loan_aging)
+      ) {
+        entry.max_loan_aging = aging;
+      }
       if (aging > NPL_AGING_DAYS) entry.npl_value = (entry.npl_value ?? 0) + pending;
     }
   }
