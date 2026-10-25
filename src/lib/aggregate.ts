@@ -1,14 +1,17 @@
 /**
  * Shared logic for turning raw uploaded spreadsheet rows into per-customer,
  * per-month figures. Runs in the browser at upload time.
+ *
+ * Every customer is identified by their REF: a phone number can have more
+ * than one REF attached to it, so REF — not the phone — is the key everywhere.
  */
 
 export type Dataset = "customer_overview" | "loan_information" | "distributor_detail" | "transaction_log";
 
 export type CustomerRow = {
   phone: string;
+  ref: string;
   name: string | null;
-  ref: string | null;
   state: string | null;
   market: string | null;
   agent: string | null;
@@ -17,18 +20,22 @@ export type CustomerRow = {
   pos_installed: string | null;
   loan_type: string | null;
   onboarding_date: string | null;
+  loyal_customer: string | null;
+  loyal_target: number | null;
+  loyal_target_achieved: number | null;
+  loyal_pct: number | null;
 };
 
 /** Cumulative, customer-level figures derived from Loan Information. */
 export type RiskRow = {
-  phone: string;
+  ref: string;
   total_pending: number | null;
   npl_value: number | null;
   max_loan_aging: number | null;
 };
 
 export type MonthRow = {
-  phone: string;
+  ref: string;
   month: string;
   loan_count?: number | null;
   loan_amount?: number | null;
@@ -112,42 +119,78 @@ export function detectDataset(headers: string[]): Dataset | null {
 
 type Row = Record<string, unknown>;
 
-/** REF -> phone, so loan and collection rows attach to the right customer. */
-export type RefMap = Map<string, string>;
+/** Phone -> the REF(s) registered under it, so rows without a REF still attach. */
+export type PhoneRefs = Map<string, string[]>;
 
-function rowRef(r: Row): string | null {
+export function rowRef(r: Row): string | null {
   const ref = str(r["REF"]) ?? str(r["Ref"]) ?? str(r["ref"]);
   return ref ? ref.trim().toLowerCase() : null;
 }
 
-/** Customer key: matched on REF where possible, otherwise the phone number. */
-function keyOf(r: Row, refMap?: RefMap): string {
-  const ref = rowRef(r);
-  if (ref && refMap?.has(ref)) return refMap.get(ref)!;
-  return normalizePhone(r["Phone"]);
-}
-
-export function buildRefMap(customers: { ref: string | null; phone: string }[]): RefMap {
-  const map: RefMap = new Map();
+export function buildPhoneRefs(customers: { ref: string | null; phone: string }[]): PhoneRefs {
+  const map: PhoneRefs = new Map();
   for (const c of customers) {
-    if (c.ref && c.phone) map.set(c.ref.trim().toLowerCase(), c.phone);
+    if (!c.ref || !c.phone) continue;
+    const refs = map.get(c.phone) ?? [];
+    if (!refs.includes(c.ref)) refs.push(c.ref);
+    map.set(c.phone, refs);
   }
   return map;
 }
 
+/**
+ * Customer key: the row's own REF when present; otherwise the phone number,
+ * but only when that phone maps to exactly one REF (no ambiguity).
+ */
+function keyOf(r: Row, phoneRefs?: PhoneRefs): string | null {
+  const ref = rowRef(r);
+  if (ref) return ref;
+  const phone = normalizePhone(r["Phone"]);
+  const refs = phone ? phoneRefs?.get(phone) : undefined;
+  return refs && refs.length === 1 ? refs[0]! : null;
+}
+
+/**
+ * Finds the Loyal Customer columns by header, however they are capitalised.
+ * flag = the Y/N column, target / achieved / pct = the figures.
+ */
+function loyalColumns(rows: Row[]): {
+  flag: string | null;
+  target: string | null;
+  achieved: string | null;
+  pct: string | null;
+} {
+  const names = new Set<string>();
+  for (const r of rows) for (const k of Object.keys(r)) if (/loyal/i.test(k)) names.add(k);
+  const pick = (re: RegExp, taken: Set<string>) =>
+    [...names].find((k) => re.test(k) && !taken.has(k)) ?? null;
+  const taken = new Set<string>();
+  const pct = pick(/%|percent/i, taken);
+  if (pct) taken.add(pct);
+  const achieved = pick(/achiev/i, taken);
+  if (achieved) taken.add(achieved);
+  const target = pick(/target/i, taken);
+  if (target) taken.add(target);
+  const flag = pick(/./, taken);
+  if (flag) taken.add(flag);
+  return { flag, target, achieved, pct };
+}
+
 export function buildCustomers(rows: Row[]): CustomerRow[] {
+  const loyal = loyalColumns(rows);
   const map = new Map<string, CustomerRow>();
   for (const r of rows) {
+    const ref = rowRef(r) ?? normalizePhone(r["Phone"]);
+    if (!ref) continue;
     const phone = normalizePhone(r["Phone"]);
-    if (!phone) continue;
-    const existing = map.get(phone);
+    const existing = map.get(ref);
     const limit = num(r["PL Limit"]);
     const balance = num(r["PL Balance Current"]);
     if (!existing) {
-      map.set(phone, {
+      map.set(ref, {
         phone,
+        ref,
         name: str(r["Organisation_Name"]) ?? str(r["Name"]),
-        ref: str(r["Ref"]) ?? str(r["REF"]),
         state: str(r["State Name"]),
         market: str(r["Market Name"]) ?? str(r["market"]),
         agent: str(r["Agent Name"]),
@@ -156,6 +199,10 @@ export function buildCustomers(rows: Row[]): CustomerRow[] {
         pos_installed: str(r["POS Installed (Y/N)"]),
         loan_type: str(r["LoanType"]),
         onboarding_date: toDateString(r["FirstLimitAssignmentDate"] ?? r["FirstLimitAssignedDate"]),
+        loyal_customer: loyal.flag ? str(r[loyal.flag]) : null,
+        loyal_target: loyal.target ? num(r[loyal.target]) : null,
+        loyal_target_achieved: loyal.achieved ? num(r[loyal.achieved]) : null,
+        loyal_pct: loyal.pct ? num(r[loyal.pct]) : null,
       });
     } else {
       existing.pl_limit = Math.max(existing.pl_limit ?? 0, limit ?? 0) || existing.pl_limit;
@@ -172,19 +219,19 @@ export function loanAgingDays(value: unknown): number | null {
   return match ? Number(match[0]) : null;
 }
 
-type Bucket = { phone: string; month: string; [k: string]: unknown };
+type Bucket = { ref: string; month: string; [k: string]: unknown };
 
-function bucketize(rows: Row[], monthOf: (r: Row) => string | null, refMap?: RefMap) {
+function bucketize(rows: Row[], monthOf: (r: Row) => string | null, phoneRefs?: PhoneRefs) {
   const map = new Map<string, Bucket>();
   const out: { key: string; bucket: Bucket; row: Row }[] = [];
   for (const r of rows) {
-    const phone = keyOf(r, refMap);
+    const ref = keyOf(r, phoneRefs);
     const month = monthOf(r);
-    if (!phone || !month) continue;
-    const key = `${phone}|${month}`;
+    if (!ref || !month) continue;
+    const key = `${ref}|${month}`;
     let bucket = map.get(key);
     if (!bucket) {
-      bucket = { phone, month };
+      bucket = { ref, month };
       map.set(key, bucket);
     }
     out.push({ key, bucket, row: r });
@@ -192,8 +239,8 @@ function bucketize(rows: Row[], monthOf: (r: Row) => string | null, refMap?: Ref
   return { map, out };
 }
 
-export function buildLoanMonths(rows: Row[], refMap?: RefMap): MonthRow[] {
-  const { map, out } = bucketize(rows, (r) => toMonth(r["LOANDATE"] ?? r["Date"]), refMap);
+export function buildLoanMonths(rows: Row[], phoneRefs?: PhoneRefs): MonthRow[] {
+  const { map, out } = bucketize(rows, (r) => toMonth(r["LOANDATE"] ?? r["Date"]), phoneRefs);
   const loanIds = new Map<string, Set<string>>();
   for (const { key, bucket, row } of out) {
     const b = bucket as MonthRow & Bucket;
@@ -221,18 +268,19 @@ export function buildLoanMonths(rows: Row[], refMap?: RefMap): MonthRow[] {
 }
 
 /**
- * Cumulative loan risk per customer, across every Loan Information record:
+ * Cumulative loan risk per REF, across every Loan Information record:
  * total amount pending, NPL value (aging above 20 days) and highest aging.
+ * The highest aging only counts loans whose class is Active, Bad Loan or NP Loan.
  */
-export function buildLoanRisk(rows: Row[], refMap?: RefMap): RiskRow[] {
+export function buildLoanRisk(rows: Row[], phoneRefs?: PhoneRefs): RiskRow[] {
   const map = new Map<string, RiskRow>();
   for (const r of rows) {
-    const phone = keyOf(r, refMap);
-    if (!phone) continue;
-    let entry = map.get(phone);
+    const ref = keyOf(r, phoneRefs);
+    if (!ref) continue;
+    let entry = map.get(ref);
     if (!entry) {
-      entry = { phone, total_pending: 0, npl_value: 0, max_loan_aging: null };
-      map.set(phone, entry);
+      entry = { ref, total_pending: 0, npl_value: 0, max_loan_aging: null };
+      map.set(ref, entry);
     }
     const pending = num(r["Total Amount Pending"]) ?? 0;
     entry.total_pending = (entry.total_pending ?? 0) + pending;
@@ -262,8 +310,8 @@ function activeDayFlag(flag: unknown, amount: unknown): number {
   return (num(amount) ?? 0) >= 1 ? 1 : 0;
 }
 
-export function buildCollectionMonths(rows: Row[], refMap?: RefMap): MonthRow[] {
-  const { map, out } = bucketize(rows, (r) => toMonth(r["Date"]), refMap);
+export function buildCollectionMonths(rows: Row[], phoneRefs?: PhoneRefs): MonthRow[] {
+  const { map, out } = bucketize(rows, (r) => toMonth(r["Date"]), phoneRefs);
   for (const { bucket, row } of out) {
     const b = bucket as MonthRow & Bucket;
     b.collection_amount = (b.collection_amount ?? 0) + (num(row["Total Collection"]) ?? 0);
@@ -277,11 +325,11 @@ export function buildCollectionMonths(rows: Row[], refMap?: RefMap): MonthRow[] 
   return [...map.values()] as MonthRow[];
 }
 
-export function buildRepaymentMonths(rows: Row[], refMap?: RefMap): MonthRow[] {
+export function buildRepaymentMonths(rows: Row[], phoneRefs?: PhoneRefs): MonthRow[] {
   const repayments = rows.filter(
     (r) => String(r["TRANSACTIONTYPE"] ?? "").toLowerCase() === "amountrepaid",
   );
-  const { map, out } = bucketize(repayments, (r) => toMonth(r["TRANSACTIONDATE"]), refMap);
+  const { map, out } = bucketize(repayments, (r) => toMonth(r["TRANSACTIONDATE"]), phoneRefs);
   for (const { bucket, row } of out) {
     const b = bucket as MonthRow & Bucket;
     b.repayment_amount = (b.repayment_amount ?? 0) + (num(row["AMOUNT"]) ?? 0);
@@ -291,29 +339,29 @@ export function buildRepaymentMonths(rows: Row[], refMap?: RefMap): MonthRow[] {
 }
 
 export type RepaymentRow = {
-  phone: string;
+  ref: string;
   txn_at: string;
   amount: number;
   loan_id: string | null;
 };
 
-/** The three most recent "amountrepaid" transactions for each customer. */
-export function buildLastRepayments(rows: Row[], refMap?: RefMap, keep = 3): RepaymentRow[] {
+/** The three most recent "amountrepaid" transactions for each REF. */
+export function buildLastRepayments(rows: Row[], phoneRefs?: PhoneRefs, keep = 3): RepaymentRow[] {
   const map = new Map<string, RepaymentRow[]>();
   for (const r of rows) {
     if (String(r["TRANSACTIONTYPE"] ?? "").toLowerCase() !== "amountrepaid") continue;
-    const phone = keyOf(r, refMap);
+    const ref = keyOf(r, phoneRefs);
     const when = excelDate(r["TRANSACTIONDATE"]);
     const amount = num(r["AMOUNT"]);
-    if (!phone || !when || amount === null) continue;
-    const list = map.get(phone) ?? [];
+    if (!ref || !when || amount === null) continue;
+    const list = map.get(ref) ?? [];
     list.push({
-      phone,
+      ref,
       txn_at: when.toISOString(),
       amount,
       loan_id: str(r["LOANID"]),
     });
-    map.set(phone, list);
+    map.set(ref, list);
   }
   const out: RepaymentRow[] = [];
   for (const list of map.values()) {

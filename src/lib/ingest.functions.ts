@@ -13,11 +13,10 @@ async function assertAdmin(context: { supabase: { rpc: Function }; userId: strin
   if (!data) throw new Error("Only an administrator can upload data.");
 }
 
-
 const customerSchema = z.object({
+  ref: z.string().min(1),
   phone: z.string().min(6),
   name: z.string().nullable().optional(),
-  ref: z.string().nullable().optional(),
   state: z.string().nullable().optional(),
   market: z.string().nullable().optional(),
   agent: z.string().nullable().optional(),
@@ -26,10 +25,14 @@ const customerSchema = z.object({
   pos_installed: z.string().nullable().optional(),
   loan_type: z.string().nullable().optional(),
   onboarding_date: z.string().nullable().optional(),
+  loyal_customer: z.string().nullable().optional(),
+  loyal_target: z.number().nullable().optional(),
+  loyal_target_achieved: z.number().nullable().optional(),
+  loyal_pct: z.number().nullable().optional(),
 });
 
 const riskSchema = z.object({
-  phone: z.string().min(6),
+  ref: z.string().min(1),
   total_pending: z.number().nullable().optional(),
   npl_value: z.number().nullable().optional(),
   max_loan_aging: z.number().nullable().optional(),
@@ -37,13 +40,13 @@ const riskSchema = z.object({
 
 const monthSchema = z
   .object({
-    phone: z.string().min(6),
+    ref: z.string().min(1),
     month: z.string().regex(/^\d{4}-\d{2}$/),
   })
   .catchall(z.union([z.number(), z.string(), z.null()]));
 
 const repaymentSchema = z.object({
-  phone: z.string().min(6),
+  ref: z.string().min(1),
   txn_at: z.string().min(4),
   amount: z.number(),
   loan_id: z.string().nullable().optional(),
@@ -84,9 +87,9 @@ export const ingestBatch = createServerFn({ method: "POST" })
       const rows = data.rows.map((r) => {
         const c = customerSchema.parse(r);
         return {
+          ref: c.ref,
           phone: c.phone,
           name: c.name ?? null,
-          ref: c.ref ?? null,
           state: c.state ?? null,
           market: c.market ?? null,
           agent: c.agent ?? null,
@@ -95,10 +98,14 @@ export const ingestBatch = createServerFn({ method: "POST" })
           pos_installed: c.pos_installed ?? null,
           loan_type: c.loan_type ?? null,
           onboarding_date: c.onboarding_date ?? null,
+          loyal_customer: c.loyal_customer ?? null,
+          loyal_target: c.loyal_target ?? null,
+          loyal_target_achieved: c.loyal_target_achieved ?? null,
+          loyal_pct: c.loyal_pct ?? null,
           updated_at: new Date().toISOString(),
         };
       });
-      const { error } = await supabaseAdmin.from("customers").upsert(rows, { onConflict: "phone" });
+      const { error } = await supabaseAdmin.from("customers").upsert(rows, { onConflict: "ref" });
       if (error) throw new Error(error.message);
       return { inserted: rows.length };
     }
@@ -107,14 +114,14 @@ export const ingestBatch = createServerFn({ method: "POST" })
       const rows = data.rows.map((r) => {
         const c = riskSchema.parse(r);
         return {
-          phone: c.phone,
+          ref: c.ref,
           total_pending: c.total_pending ?? null,
           npl_value: c.npl_value ?? null,
           max_loan_aging: c.max_loan_aging ?? null,
           updated_at: new Date().toISOString(),
         };
       });
-      const { error } = await supabaseAdmin.from("customers").upsert(rows, { onConflict: "phone" });
+      const { error } = await supabaseAdmin.from("customers").upsert(rows, { onConflict: "ref" });
       if (error) throw new Error(error.message);
       return { inserted: rows.length };
     }
@@ -123,7 +130,7 @@ export const ingestBatch = createServerFn({ method: "POST" })
       const rows = data.rows.map((r) => {
         const c = repaymentSchema.parse(r);
         return {
-          phone: c.phone,
+          ref: c.ref,
           txn_at: c.txn_at,
           amount: c.amount,
           loan_id: c.loan_id ?? null,
@@ -131,15 +138,15 @@ export const ingestBatch = createServerFn({ method: "POST" })
         };
       });
       // Replace each customer's stored repayments so only the latest three remain.
-      const phones = [...new Set(rows.map((r) => r.phone))];
+      const refs = [...new Set(rows.map((r) => r.ref))];
       const { error: clearError } = await supabaseAdmin
         .from("customer_repayments")
         .delete()
-        .in("phone", phones);
+        .in("ref", refs);
       if (clearError) throw new Error(clearError.message);
       const { error } = await supabaseAdmin
         .from("customer_repayments")
-        .upsert(rows, { onConflict: "phone,txn_at,amount" });
+        .upsert(rows, { onConflict: "ref,txn_at,amount" });
       if (error) throw new Error(error.message);
       return { inserted: rows.length };
     }
@@ -147,19 +154,19 @@ export const ingestBatch = createServerFn({ method: "POST" })
     // Merge the incoming monthly figures with whatever is already stored for
     // those months so uploading one file never wipes another file's numbers.
     const rows = data.rows.map((r) => monthSchema.parse(r));
-    const keys = rows.map((r) => `${r.phone}|${r.month}`);
-    const phones = [...new Set(rows.map((r) => r.phone))];
+    const keys = rows.map((r) => `${r.ref}|${r.month}`);
+    const refs = [...new Set(rows.map((r) => r.ref))];
     const months = [...new Set(rows.map((r) => r.month))];
     const { data: existing, error: readError } = await supabaseAdmin
       .from("customer_months")
       .select("*")
-      .in("phone", phones)
+      .in("ref", refs)
       .in("month", months);
     if (readError) throw new Error(readError.message);
 
     const existingMap = new Map<string, Record<string, unknown>>();
     for (const row of existing ?? []) {
-      existingMap.set(`${row.phone}|${row.month}`, row as Record<string, unknown>);
+      existingMap.set(`${row.ref}|${row.month}`, row as Record<string, unknown>);
     }
 
     const merged = rows.map((row, i) => {
@@ -172,7 +179,7 @@ export const ingestBatch = createServerFn({ method: "POST" })
         return Number(incoming);
       };
       return {
-        phone: row.phone,
+        ref: row.ref,
         month: row.month,
         updated_at: new Date().toISOString(),
         loan_count: pick("loan_count"),
@@ -195,7 +202,7 @@ export const ingestBatch = createServerFn({ method: "POST" })
 
     const { error } = await supabaseAdmin
       .from("customer_months")
-      .upsert(merged, { onConflict: "phone,month" });
+      .upsert(merged, { onConflict: "ref,month" });
     if (error) throw new Error(error.message);
     return { inserted: merged.length };
   });

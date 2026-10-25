@@ -37,9 +37,9 @@ export const Route = createFileRoute("/")({
 });
 
 type Customer = {
+  ref: string;
   phone: string;
   name: string | null;
-  ref: string | null;
   state: string | null;
   market: string | null;
   agent: string | null;
@@ -51,9 +51,14 @@ type Customer = {
   total_pending: number | null;
   npl_value: number | null;
   max_loan_aging: number | null;
+  loyal_customer: string | null;
+  loyal_target: number | null;
+  loyal_target_achieved: number | null;
+  loyal_pct: number | null;
 };
 
 type MonthRecord = {
+  ref: string;
   month: string;
   loan_count: number | null;
   loan_amount: number | null;
@@ -69,6 +74,7 @@ type MonthRecord = {
 };
 
 type Repayment = {
+  ref: string;
   txn_at: string;
   amount: number | null;
   loan_id: string | null;
@@ -100,6 +106,7 @@ const dateTimeLabel = (value: string) => {
 function LookupPage() {
   const [input, setInput] = useState("");
   const [phone, setPhone] = useState<string>("");
+  const [selectedRef, setSelectedRef] = useState<string | null>(null);
   const [anchor, setAnchor] = useState<string | null>(null);
   const [extraMonths, setExtraMonths] = useState<string[]>([]);
 
@@ -107,42 +114,60 @@ function LookupPage() {
     queryKey: ["customer", phone],
     enabled: phone.length >= 6,
     queryFn: async () => {
-      const { data: customer, error } = await supabase
-        .from("customers")
-        .select("*")
-        .eq("phone", phone)
-        .maybeSingle();
-      if (error) throw error;
+      // One phone number can carry several REFs; try the REF itself too.
+      let customers: Customer[] = [];
+      const byPhone = await supabase.from("customers").select("*").eq("phone", phone);
+      if (byPhone.error) throw byPhone.error;
+      customers = (byPhone.data ?? []) as Customer[];
+      if (customers.length === 0) {
+        const byRef = await supabase
+          .from("customers")
+          .select("*")
+          .eq("ref", phone.trim().toLowerCase());
+        if (byRef.error) throw byRef.error;
+        customers = (byRef.data ?? []) as Customer[];
+      }
+      if (customers.length === 0) return { customers, months: [], repayments: [] };
 
-      const { data: months, error: monthsError } = await supabase
+      const refs = customers.map((c) => c.ref);
+      const monthsRes = await supabase
         .from("customer_months")
         .select(
-          "month, loan_count, loan_amount, avg_loan_aging, aging_sum, aging_count, npl_value, collection_amount, collection_active_days, pos_active_days, wallet_active_days, amount_pending",
+          "ref, month, loan_count, loan_amount, avg_loan_aging, aging_sum, aging_count, npl_value, collection_amount, collection_active_days, pos_active_days, wallet_active_days, amount_pending",
         )
-        .eq("phone", phone)
+        .in("ref", refs)
         .order("month", { ascending: false });
-      if (monthsError) throw monthsError;
+      if (monthsRes.error) throw monthsRes.error;
 
-      const { data: repayments, error: repaymentsError } = await supabase
+      const repaymentsRes = await supabase
         .from("customer_repayments")
-        .select("txn_at, amount, loan_id")
-        .eq("phone", phone)
-        .order("txn_at", { ascending: false })
-        .limit(3);
-      if (repaymentsError) throw repaymentsError;
+        .select("ref, txn_at, amount, loan_id")
+        .in("ref", refs)
+        .order("txn_at", { ascending: false });
+      if (repaymentsRes.error) throw repaymentsRes.error;
 
       return {
-        customer: (customer ?? null) as Customer | null,
-        months: (months ?? []) as MonthRecord[],
-        repayments: (repayments ?? []) as Repayment[],
+        customers,
+        months: (monthsRes.data ?? []) as MonthRecord[],
+        repayments: (repaymentsRes.data ?? []) as Repayment[],
       };
     },
   });
 
-  const availableMonths = useMemo(
-    () => (search.data?.months ?? []).map((m) => m.month),
-    [search.data],
+  const customers = search.data?.customers ?? [];
+  const activeRef = selectedRef ?? customers[0]?.ref ?? null;
+  const customer = customers.find((c) => c.ref === activeRef) ?? null;
+
+  const months = useMemo(
+    () => (search.data?.months ?? []).filter((m) => m.ref === activeRef),
+    [search.data, activeRef],
   );
+  const repayments = useMemo(
+    () => (search.data?.repayments ?? []).filter((r) => r.ref === activeRef).slice(0, 3),
+    [search.data, activeRef],
+  );
+
+  const availableMonths = useMemo(() => months.map((m) => m.month), [months]);
   const latestMonth = availableMonths[0] ?? null;
   const currentMonth = anchor ?? latestMonth;
 
@@ -154,20 +179,20 @@ function LookupPage() {
 
   const byMonth = useMemo(() => {
     const map = new Map<string, MonthRecord>();
-    for (const m of search.data?.months ?? []) map.set(m.month, m);
+    for (const m of months) map.set(m.month, m);
     return map;
-  }, [search.data]);
+  }, [months]);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    const normalized = normalizePhone(input);
+    const normalized = normalizePhone(input) || input.trim().toLowerCase();
     setAnchor(null);
     setExtraMonths([]);
-    setPhone(normalized || input.replace(/\D/g, ""));
+    setSelectedRef(null);
+    setPhone(normalized);
   };
 
-  const customer = search.data?.customer ?? null;
-  const notFound = search.isSuccess && !customer && (search.data?.months.length ?? 0) === 0;
+  const notFound = search.isSuccess && customers.length === 0;
 
   const rows: {
     label: string;
@@ -213,8 +238,6 @@ function LookupPage() {
     },
   ];
 
-  const repayments = search.data?.repayments ?? [];
-
   return (
     <main className="mx-auto max-w-6xl px-5 pb-20 pt-10">
       <div className="max-w-2xl">
@@ -225,7 +248,8 @@ function LookupPage() {
         <p className="mt-3 text-sm text-muted-foreground">
           Enter the phone number to see PL limit, loan usage, average repayment days, PL balance,
           collections and POS activity for the current month and each of the last three months — or
-          any other month you pick.
+          any other month you pick. A REF is chosen automatically when a number holds several
+          accounts.
         </p>
       </div>
 
@@ -237,7 +261,7 @@ function LookupPage() {
             onChange={(e) => setInput(e.target.value)}
             inputMode="tel"
             placeholder="e.g. 08033814902"
-            aria-label="Customer phone number"
+            aria-label="Customer phone number or REF"
             className="numeric h-12 border-border bg-surface pl-10 text-base"
           />
         </div>
@@ -267,14 +291,43 @@ function LookupPage() {
         </div>
       )}
 
+      {customers.length > 1 && !search.isFetching && (
+        <div className="panel mt-8 p-5">
+          <p className="label-caps">This phone number holds {customers.length} customer accounts</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {customers.map((c) => (
+              <button
+                key={c.ref}
+                type="button"
+                onClick={() => {
+                  setSelectedRef(c.ref);
+                  setAnchor(null);
+                  setExtraMonths([]);
+                }}
+                className={`rounded-full border px-3 py-1.5 text-xs transition-colors ${
+                  c.ref === activeRef
+                    ? "border-primary bg-primary/15 font-semibold text-primary"
+                    : "border-border text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <span className="numeric">{c.ref}</span>
+                {c.name ? ` · ${c.name}` : ""}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {customer && !search.isFetching && (
-        <section className="mt-10 space-y-6">
+        <section className="mt-8 space-y-6">
           <div className="panel p-6">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <p className="label-caps">Organization name</p>
                 <h2 className="mt-1 text-xl font-bold">{customer.name ?? "Unnamed customer"}</h2>
-                <p className="numeric mt-1 text-sm text-muted-foreground">{customer.phone}</p>
+                <p className="numeric mt-1 text-sm text-muted-foreground">
+                  {customer.phone} · REF {customer.ref}
+                </p>
               </div>
               <div className="flex flex-wrap gap-2 text-xs">
                 {[customer.state, customer.market, customer.loan_type]
@@ -315,6 +368,21 @@ function LookupPage() {
               <Stat
                 label="POS installed"
                 value={customer.pos_installed === "Y" ? "Yes" : "No"}
+                small
+              />
+            </div>
+
+            <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <Stat label="Loyal customer" value={customer.loyal_customer ?? "—"} small />
+              <Stat label="Loyal customer target" value={money(customer.loyal_target)} small />
+              <Stat
+                label="Loyal customer target achieved"
+                value={money(customer.loyal_target_achieved)}
+                small
+              />
+              <Stat
+                label="Loyal customer (% achieved)"
+                value={customer.loyal_pct != null ? `${plain(customer.loyal_pct)}%` : "—"}
                 small
               />
             </div>
