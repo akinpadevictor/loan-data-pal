@@ -31,6 +31,7 @@ export type Database = {
           phone: string
           pos_active_days: number | null
           pos_collection: number | null
+          ref: string
           repayment_amount: number | null
           repayment_count: number | null
           txn_count: number | null
@@ -53,6 +54,7 @@ export type Database = {
           phone: string
           pos_active_days?: number | null
           pos_collection?: number | null
+          ref: string
           repayment_amount?: number | null
           repayment_count?: number | null
           txn_count?: number | null
@@ -75,6 +77,7 @@ export type Database = {
           phone?: string
           pos_active_days?: number | null
           pos_collection?: number | null
+          ref?: string
           repayment_amount?: number | null
           repayment_count?: number | null
           txn_count?: number | null
@@ -88,6 +91,7 @@ export type Database = {
           amount: number
           loan_id: string | null
           phone: string
+          ref: string
           txn_at: string
           updated_at: string
         }
@@ -95,6 +99,7 @@ export type Database = {
           amount: number
           loan_id?: string | null
           phone: string
+          ref: string
           txn_at: string
           updated_at?: string
         }
@@ -102,6 +107,7 @@ export type Database = {
           amount?: number
           loan_id?: string | null
           phone?: string
+          ref?: string
           txn_at?: string
           updated_at?: string
         }
@@ -111,6 +117,10 @@ export type Database = {
         Row: {
           agent: string | null
           loan_type: string | null
+          loyal_customer: string | null
+          loyal_pct: number | null
+          loyal_target: number | null
+          loyal_target_achieved: number | null
           market: string | null
           max_loan_aging: number | null
           name: string | null
@@ -120,7 +130,7 @@ export type Database = {
           pl_balance: number | null
           pl_limit: number | null
           pos_installed: string | null
-          ref: string | null
+          ref: string
           state: string | null
           total_pending: number | null
           updated_at: string
@@ -128,6 +138,10 @@ export type Database = {
         Insert: {
           agent?: string | null
           loan_type?: string | null
+          loyal_customer?: string | null
+          loyal_pct?: number | null
+          loyal_target?: number | null
+          loyal_target_achieved?: number | null
           market?: string | null
           max_loan_aging?: number | null
           name?: string | null
@@ -137,7 +151,7 @@ export type Database = {
           pl_balance?: number | null
           pl_limit?: number | null
           pos_installed?: string | null
-          ref?: string | null
+          ref: string
           state?: string | null
           total_pending?: number | null
           updated_at?: string
@@ -145,6 +159,10 @@ export type Database = {
         Update: {
           agent?: string | null
           loan_type?: string | null
+          loyal_customer?: string | null
+          loyal_pct?: number | null
+          loyal_target?: number | null
+          loyal_target_achieved?: number | null
           market?: string | null
           max_loan_aging?: number | null
           name?: string | null
@@ -154,7 +172,7 @@ export type Database = {
           pl_balance?: number | null
           pl_limit?: number | null
           pos_installed?: string | null
-          ref?: string | null
+          ref?: string
           state?: string | null
           total_pending?: number | null
           updated_at?: string
