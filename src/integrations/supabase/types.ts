@@ -51,7 +51,7 @@ export type Database = {
           loan_count?: number | null
           month: string
           npl_value?: number | null
-          phone: string
+          phone?: string
           pos_active_days?: number | null
           pos_collection?: number | null
           ref: string
@@ -98,7 +98,7 @@ export type Database = {
         Insert: {
           amount: number
           loan_id?: string | null
-          phone: string
+          phone?: string
           ref: string
           txn_at: string
           updated_at?: string
