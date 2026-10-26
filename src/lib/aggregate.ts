@@ -130,10 +130,11 @@ export function rowRef(r: Row): string | null {
 export function buildPhoneRefs(customers: { ref: string | null; phone: string }[]): PhoneRefs {
   const map: PhoneRefs = new Map();
   for (const c of customers) {
-    if (!c.ref || !c.phone) continue;
-    const refs = map.get(c.phone) ?? [];
+    const phone = normalizePhone(c.phone);
+    if (!c.ref || !phone) continue;
+    const refs = map.get(phone) ?? [];
     if (!refs.includes(c.ref)) refs.push(c.ref);
-    map.set(c.phone, refs);
+    map.set(phone, refs);
   }
   return map;
 }

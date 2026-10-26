@@ -29,6 +29,13 @@
       "when": 1792887910843,
       "tag": "0003_ref_as_customer_key",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792999846496,
+      "tag": "0004_deprecated_phone_defaults",
+      "breakpoints": true
     }
   ]
 }
