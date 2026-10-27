@@ -15,7 +15,8 @@ async function assertAdmin(context: { supabase: { rpc: Function }; userId: strin
 
 const customerSchema = z.object({
   ref: z.string().min(1),
-  phone: z.string().min(6),
+  // REF is the customer's identity, so the phone may be blank or short.
+  phone: z.string(),
   name: z.string().nullable().optional(),
   state: z.string().nullable().optional(),
   market: z.string().nullable().optional(),
