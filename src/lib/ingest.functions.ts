@@ -15,7 +15,8 @@ async function assertAdmin(context: { supabase: { rpc: Function }; userId: strin
 
 const customerSchema = z.object({
   ref: z.string().min(1),
-  phone: z.string().min(6),
+  // REF is the customer's identity, so the phone may be blank or short.
+  phone: z.string(),
   name: z.string().nullable().optional(),
   state: z.string().nullable().optional(),
   market: z.string().nullable().optional(),
@@ -111,7 +112,7 @@ export const ingestBatch = createServerFn({ method: "POST" })
     }
 
     if (data.target === "risk") {
-      const refs = [...new Set(data.rows.map((r) => String(r.ref ?? "")))].filter(Boolean);
+      const refs = [...new Set(data.rows.map((r) => String(r["ref"] ?? "")))].filter(Boolean);
       // The risk figures ride on the customer row, so carry the stored phone along.
       const { data: existing, error: readError } = await supabaseAdmin
         .from("customers")
