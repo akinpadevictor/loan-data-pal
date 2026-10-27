@@ -111,10 +111,19 @@ export const ingestBatch = createServerFn({ method: "POST" })
     }
 
     if (data.target === "risk") {
+      const refs = [...new Set(data.rows.map((r) => String(r.ref ?? "")))].filter(Boolean);
+      // The risk figures ride on the customer row, so carry the stored phone along.
+      const { data: existing, error: readError } = await supabaseAdmin
+        .from("customers")
+        .select("ref, phone")
+        .in("ref", refs);
+      if (readError) throw new Error(readError.message);
+      const phoneByRef = new Map((existing ?? []).map((e) => [e.ref as string, e.phone as string]));
       const rows = data.rows.map((r) => {
         const c = riskSchema.parse(r);
         return {
           ref: c.ref,
+          phone: phoneByRef.get(c.ref) ?? "",
           total_pending: c.total_pending ?? null,
           npl_value: c.npl_value ?? null,
           max_loan_aging: c.max_loan_aging ?? null,
