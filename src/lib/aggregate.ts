@@ -177,6 +177,17 @@ function loyalColumns(rows: Row[]): {
   return { flag, target, achieved, pct };
 }
 
+/**
+ * The % Achieved column is Target Achieved against the Target, stored in
+ * Excel's percentage format: the cell holds the fraction (0.87 = 87%) while
+ * a text value such as "50%" is already the percentage.
+ */
+function pctValue(raw: unknown): number | null {
+  if (typeof raw === "string" && raw.includes("%")) return num(raw);
+  const n = num(raw);
+  return n === null ? null : n * 100;
+}
+
 export function buildCustomers(rows: Row[]): CustomerRow[] {
   const loyal = loyalColumns(rows);
   const map = new Map<string, CustomerRow>();
