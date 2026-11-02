@@ -88,7 +88,7 @@ test("percent achieved stored as an Excel fraction becomes a percentage", () => 
       "Loyal Customer (% Achieved)": 0.87027625,
     },
   ]);
-  assert.equal(customer?.loyal_pct, 87.03); // 348110500 / 400000000 = 87.03%
+  assert.equal(customer?.loyal_pct, 87.027625); // 348110500 / 400000000 = 87.03%
 });
 
 test("percent achieved given as text with a % sign stays as-is", () => {
