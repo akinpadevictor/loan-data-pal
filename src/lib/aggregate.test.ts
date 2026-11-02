@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { buildCustomers, buildLoanMonths, buildLoanRisk, buildPhoneRefs } from "./aggregate";
+import { buildCollectionMonths, buildCustomers, buildLoanMonths, buildLoanRisk, buildPhoneRefs } from "./aggregate";
 
 test("highest loan aging only uses Active, Bad Loan, and NP Loan classes", () => {
   const [risk] = buildLoanRisk([
@@ -75,4 +75,61 @@ test("customers without loyal columns still build with empty loyal fields", () =
   ]);
   assert.equal(customer?.loyal_customer, null);
   assert.equal(customer?.loyal_target, null);
+});
+
+test("active days for each month are the sum of their distributor columns", () => {
+  const months = buildCollectionMonths([
+    {
+      Ref: "refh",
+      Date: "2026-09-01",
+      "Total Collection": 5000,
+      "POS Collection": 0,
+      "Wallet Collection": 2000,
+      "Active Days": 1,
+      "Active Days POS": 0,
+      "Active Days Wallet": 1,
+    },
+    {
+      Ref: "refh",
+      Date: "2026-09-02",
+      "Total Collection": 3000,
+      "POS Collection": 3000,
+      "Wallet Collection": 0,
+      "Active Days": 1,
+      "Active Days POS": 1,
+      "Active Days Wallet": 0,
+    },
+    {
+      Ref: "refh",
+      Date: "2026-09-03",
+      "Total Collection": 0,
+      "POS Collection": 0,
+      "Wallet Collection": 0,
+      "Active Days": 0,
+      "Active Days POS": 0,
+      "Active Days Wallet": 0,
+    },
+  ]);
+  assert.equal(months.length, 1);
+  assert.equal(months[0]?.collection_active_days, 2);
+  assert.equal(months[0]?.pos_active_days, 1);
+  assert.equal(months[0]?.wallet_active_days, 1);
+});
+
+test("a formula string in an active-day cell falls back to the amount", () => {
+  const months = buildCollectionMonths([
+    {
+      Ref: "refi",
+      Date: "2026-09-01",
+      "Total Collection": 8000,
+      "POS Collection": 0,
+      "Wallet Collection": 8000,
+      "Active Days": "=IF(Table1[[#This Row],[Total Collection]]>=1,1,0)",
+      "Active Days POS": "=IF(Table1[[#This Row],[POS Collection]]>=1,1,0)",
+      "Active Days Wallet": "=IF(Table1[[#This Row],[Wallet Collection]]>=1,1,0)",
+    },
+  ]);
+  assert.equal(months[0]?.collection_active_days, 1);
+  assert.equal(months[0]?.pos_active_days, 0);
+  assert.equal(months[0]?.wallet_active_days, 1);
 });
