@@ -214,7 +214,7 @@ export function buildCustomers(rows: Row[]): CustomerRow[] {
         loyal_customer: loyal.flag ? str(r[loyal.flag]) : null,
         loyal_target: loyal.target ? num(r[loyal.target]) : null,
         loyal_target_achieved: loyal.achieved ? num(r[loyal.achieved]) : null,
-        loyal_pct: loyal.pct ? num(r[loyal.pct]) : null,
+        loyal_pct: loyal.pct ? pctValue(r[loyal.pct]) : null,
       });
     } else {
       existing.pl_limit = Math.max(existing.pl_limit ?? 0, limit ?? 0) || existing.pl_limit;
