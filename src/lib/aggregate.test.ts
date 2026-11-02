@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { buildCustomers, buildLoanMonths, buildLoanRisk, buildPhoneRefs } from "./aggregate";
+import { buildCollectionMonths, buildCustomers, buildLoanMonths, buildLoanRisk, buildPhoneRefs } from "./aggregate";
 
 test("highest loan aging only uses Active, Bad Loan, and NP Loan classes", () => {
   const [risk] = buildLoanRisk([
