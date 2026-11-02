@@ -77,6 +77,32 @@ test("customers without loyal columns still build with empty loyal fields", () =
   assert.equal(customer?.loyal_target, null);
 });
 
+test("percent achieved stored as an Excel fraction becomes a percentage", () => {
+  const [customer] = buildCustomers([
+    {
+      Ref: "refj",
+      Phone: "08066666666",
+      "Loyal Customer": "Y",
+      "Loyal Customer Target": 400000000,
+      "Loyal Customer Target Achieved": 348110500,
+      "Loyal Customer (% Achieved)": 0.87027625,
+    },
+  ]);
+  assert.equal(customer?.loyal_pct, 87.03); // 348110500 / 400000000 = 87.03%
+});
+
+test("percent achieved given as text with a % sign stays as-is", () => {
+  const [customer] = buildCustomers([
+    {
+      Ref: "refk",
+      Phone: "08077777777",
+      "Loyal Customer": "Y",
+      "Loyal Customer (% Achieved)": "50%",
+    },
+  ]);
+  assert.equal(customer?.loyal_pct, 50);
+});
+
 test("active days for each month are the sum of their distributor columns", () => {
   const months = buildCollectionMonths([
     {
