@@ -302,12 +302,18 @@ export function buildLoanRisk(rows: Row[], phoneRefs?: PhoneRefs): RiskRow[] {
 }
 
 /**
- * Active-day flag for a channel. The spreadsheet stores these as formulas, so
- * when the cached numeric value is missing we derive it from the amount.
+ * Active-day count for one Distributor Detail row. The spreadsheet stores
+ * these columns as formulas, so when the cached numeric value is missing we
+ * derive it from the amount; otherwise the column value is summed as-is.
  */
-function activeDayFlag(flag: unknown, amount: unknown): number {
-  const direct = num(flag);
-  if (direct !== null) return direct > 0 ? 1 : 0;
+function dayValue(flag: unknown, amount: unknown): number {
+  const direct =
+    typeof flag === "number"
+      ? flag
+      : typeof flag === "string" && /^-?\d+(\.\d+)?$/.test(flag.trim())
+        ? Number(flag)
+        : null;
+  if (direct !== null) return direct;
   return (num(amount) ?? 0) >= 1 ? 1 : 0;
 }
 
@@ -316,11 +322,13 @@ export function buildCollectionMonths(rows: Row[], phoneRefs?: PhoneRefs): Month
   for (const { bucket, row } of out) {
     const b = bucket as MonthRow & Bucket;
     b.collection_amount = (b.collection_amount ?? 0) + (num(row["Total Collection"]) ?? 0);
-    b.collection_active_days = (b.collection_active_days ?? 0) + (num(row["Active Days"]) ?? 0);
-    b.pos_active_days = (b.pos_active_days ?? 0) + (num(row["Active Days POS"]) ?? 0);
+    b.collection_active_days =
+      (b.collection_active_days ?? 0) + dayValue(row["Active Days"], row["Total Collection"]);
+    b.pos_active_days =
+      (b.pos_active_days ?? 0) + dayValue(row["Active Days POS"], row["POS Collection"]);
     b.pos_collection = (b.pos_collection ?? 0) + (num(row["POS Collection"]) ?? 0);
     b.wallet_active_days =
-      (b.wallet_active_days ?? 0) + (activeDayFlag(row["Active Days Wallet"], row["Wallet Collection"]) ?? 0);
+      (b.wallet_active_days ?? 0) + dayValue(row["Active Days Wallet"], row["Wallet Collection"]);
     b.txn_count = (b.txn_count ?? 0) + (num(row["No of Transactions"]) ?? 0);
   }
   return [...map.values()] as MonthRow[];
