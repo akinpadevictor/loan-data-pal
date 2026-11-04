@@ -103,6 +103,35 @@ test("percent achieved given as text with a % sign stays as-is", () => {
   assert.equal(customer?.loyal_pct, 50);
 });
 
+test("percent achieved comes from target and achieved, not the mixed-format % column", () => {
+  const [customer] = buildCustomers([
+    {
+      Ref: "refl",
+      Phone: "08088888888",
+      "Loyal Customer": "Y",
+      "Loyal Customer Target": 30750000,
+      "Loyal Customer Target Achieved": 7000000,
+      // The spreadsheet's % column sometimes holds the unscaled ratio with a
+      // % sign; deriving from the figures must win.
+      "Loyal Customer (% Achieved)": "0.22764227642276422%",
+    },
+  ]);
+  assert.ok(Math.abs((customer?.loyal_pct ?? 0) - 22.764227642276423) < 1e-9);
+});
+
+test("percent achieved falls back to the % column when figures are missing", () => {
+  const [customer] = buildCustomers([
+    {
+      Ref: "refm",
+      Phone: "08099999999",
+      "Loyal Customer": "Y",
+      "Loyal Customer Target Achieved": 250,
+      "Loyal Customer (% Achieved)": 0.5,
+    },
+  ]);
+  assert.equal(customer?.loyal_pct, 50);
+});
+
 test("active days for each month are the sum of their distributor columns", () => {
   const months = buildCollectionMonths([
     {
