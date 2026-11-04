@@ -198,6 +198,18 @@ export function buildCustomers(rows: Row[]): CustomerRow[] {
     const existing = map.get(ref);
     const limit = num(r["PL Limit"]);
     const balance = num(r["PL Balance Current"]);
+    const loyalTarget = loyal.target ? num(r[loyal.target]) : null;
+    const loyalAchieved = loyal.achieved ? num(r[loyal.achieved]) : null;
+    // % Achieved is Target Achieved against the Target. The spreadsheet's %
+    // column mixes formats (fractions, percentages, unscaled ratio text), so
+    // the two figures are the reliable source and the column is only a
+    // fallback when either figure is missing.
+    const loyalPct =
+      loyalTarget !== null && loyalTarget > 0 && loyalAchieved !== null
+        ? (loyalAchieved / loyalTarget) * 100
+        : loyal.pct
+          ? pctValue(r[loyal.pct])
+          : null;
     if (!existing) {
       map.set(ref, {
         phone,
@@ -212,9 +224,9 @@ export function buildCustomers(rows: Row[]): CustomerRow[] {
         loan_type: str(r["LoanType"]),
         onboarding_date: toDateString(r["FirstLimitAssignmentDate"] ?? r["FirstLimitAssignedDate"]),
         loyal_customer: loyal.flag ? str(r[loyal.flag]) : null,
-        loyal_target: loyal.target ? num(r[loyal.target]) : null,
-        loyal_target_achieved: loyal.achieved ? num(r[loyal.achieved]) : null,
-        loyal_pct: loyal.pct ? pctValue(r[loyal.pct]) : null,
+        loyal_target: loyalTarget,
+        loyal_target_achieved: loyalAchieved,
+        loyal_pct: loyalPct,
       });
     } else {
       existing.pl_limit = Math.max(existing.pl_limit ?? 0, limit ?? 0) || existing.pl_limit;
